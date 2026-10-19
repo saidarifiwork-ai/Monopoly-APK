@@ -1,5 +1,11 @@
 # Quartiers — jeu immobilier entre amis
 
+## Application Android Flutter
+
+L'application mobile se trouve dans [`mobile/`](mobile/README.md). Elle propose une interface tactile avec plateau zoomable et commandes en bas de l'écran. Le solo avec robot et les salons entre amis utilisent le serveur Node.js et nécessitent Internet. Consultez le guide mobile pour compiler et installer un APK de test, configurer le serveur et exécuter les tests.
+
+Les instructions Windows ci-dessous concernent la version web PowerShell d'origine.
+
 Jeu original en français, inspiré du principe de Monopoly. Plateau vert à **40 cases et 22 villes marocaines** : Fès, Casablanca, Rabat, Marrakech, Tanger… Mode solo contre un robot ou 2 à 6 joueurs (humains et robots). Aucune installation de dépendances, aucun compte, aucune clé payante. Windows PowerShell 5.1 suffit.
 
 ## Un plateau animé
