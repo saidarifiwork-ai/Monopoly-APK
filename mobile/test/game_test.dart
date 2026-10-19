@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -80,6 +81,63 @@ Json fixture() => {
     };
 
 void main() {
+  test('the board uses the original web renderer byte for byte', () {
+    for (final name in ['app.js', 'art.js', 'style.css']) {
+      expect(File('assets/game/$name').readAsBytesSync(),
+          File('../$name').readAsBytesSync(),
+          reason: '$name must stay identical');
+    }
+  });
+  test('renderer bridge restricts routes and keeps the real session native',
+      () async {
+    final calls = <http.Request>[];
+    final api = GameApi(Uri.parse('https://game.example'),
+        client: MockClient((request) async {
+      calls.add(request);
+      if (request.url.path == '/api/state') {
+        expect(request.url.queryParameters['token'], 'real-secret-session');
+        expect(request.url.queryParameters['code'], 'ABC234');
+      } else {
+        final body = jsonDecode(request.body) as Json;
+        expect(body['token'], 'real-secret-session');
+        expect(body['type'], 'roll');
+      }
+      return http.Response('{"ok":true}', 200);
+    }));
+    final transport = RendererTransport(
+        api, {'code': 'ABC234', 'token': 'real-secret-session'});
+    expect(
+        (await transport.handle({
+          'url': '/api/state?token=native-session',
+          'method': 'GET'
+        }))['status'],
+        200);
+    expect(
+        (await transport.handle({
+          'url': '/api/action',
+          'method': 'POST',
+          'body': jsonEncode(
+              {'type': 'roll', 'code': 'other', 'token': 'native-session'})
+        }))['status'],
+        200);
+    expect(
+        (await transport.handle({
+          'url': 'https://other.example/api/state',
+          'method': 'GET'
+        }))['status'],
+        403);
+    expect(
+        (await transport.handle(
+            {'url': '/api/create', 'method': 'POST', 'body': '{}'}))['status'],
+        403);
+    expect(
+        (await transport
+            .handle({'url': '/api/action', 'method': 'GET'}))['status'],
+        403);
+    expect(calls.length, 2);
+    api.close();
+  });
+
   test(
     'production endpoints must be HTTPS and contain no credentials/path',
     () {

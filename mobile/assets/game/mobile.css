@@ -1,0 +1,30 @@
+/* Only the surrounding controls change. Board styling stays in style.css. */
+html.quartiers-mobile header,
+html.quartiers-mobile footer,
+html.quartiers-mobile #welcome,
+html.quartiers-mobile .keyboard-hint,
+html.quartiers-mobile .board-caption { display: none !important; }
+html.quartiers-mobile main { padding: 4px 8px calc(var(--dock-height, 160px) + 16px); max-width: 760px; }
+html.quartiers-mobile .layout { display: block; width: 100%; }
+.mobile-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; gap: 8px; }
+.mobile-toolbar button { min-height: 44px; padding: 10px 12px; }
+.mobile-toolbar .room-chip { text-align: center; font-size: 9px; }
+.mobile-toolbar .room-chip strong { display: block; font-size: 15px; }
+.mobile-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin: 12px 0; }
+html.quartiers-mobile #connection { display: block; padding: 2px 12px 6px; }
+.mobile-tabs button { min-height: 48px; font-size: 12px; padding: 8px 2px; }
+.mobile-tabs button[aria-pressed=true] { color: #fffdf5; background: var(--ink); }
+.mobile-panels { margin-bottom: 12px; }
+.mobile-panels .panel { margin: 0; }
+.mobile-panels #log { max-height: 45dvh; }
+.mobile-dock { position: fixed; bottom: 0; left: 8px; right: 8px; max-width: 744px; margin: 0 auto; z-index: 15; padding: 12px; box-shadow: 0 -5px 16px #233c3218; max-height: 40dvh; overflow-y: auto; }
+.mobile-dock #actions { display: flex; flex-direction: column; gap: 8px; }
+.mobile-dock #actions button, .mobile-panels button { min-height: 48px; font-size: 14px; }
+.mobile-dock #status { margin: 5px 0 10px; font-size: 12px; }
+.mobile-dock #action-title { margin: 4px 0; font-size: 18px; }
+.mobile-dock .opening-results { max-height: 120px; overflow-y: auto; }
+.mobile-panels .player-name { font-size: 14px; }
+.mobile-panels .money { font-size: 18px; }
+@media (orientation: landscape) {
+  html.quartiers-mobile main { max-width: 760px; }
+}

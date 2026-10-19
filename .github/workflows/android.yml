@@ -28,13 +28,14 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
+      - run: python3 tool/sync_game_assets.py
       - run: flutter pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --debug
+      - run: flutter build apk --release --target-platform android-arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: quartiers-maroc-android-debug
-          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          name: quartiers-maroc-android-test
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

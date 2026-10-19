@@ -28,7 +28,8 @@ void main() {
   });
 
   for (final size in [const Size(360, 800), const Size(800, 360)]) {
-    testWidgets('game and bottom controls fit $size', (tester) async {
+    testWidgets('native welcome hands the game to the original renderer $size',
+        (tester) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -37,25 +38,20 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       // Empty server prevents network restore during this layout test.
       await prefs.setString('server', '');
-      final json = fixture();
-      final templates = (json['tiles'] as List).cast<Json>();
-      json['tiles'] = List.generate(
-        40,
-        (i) => {...templates[i % 3], 'owner': i == 0 ? '' : 'a'},
-      );
       final c = GameController(prefs)
-        ..state = GameState(json)
+        ..state = GameState(fixture())
         ..connected = true;
-      await tester.pumpWidget(QuartiersApp(controller: c));
+      await tester.pumpWidget(QuartiersApp(
+          controller: c,
+          gameViewBuilder: (game, onHome) =>
+              const Center(child: Text('Rendu original embarqué'))));
       await tester.pump();
-      expect(find.text('🎲 Lancer les dés'), findsOneWidget);
-      expect(find.text('SALON '), findsOneWidget);
+      expect(find.text('Rendu original embarqué'), findsOneWidget);
+      expect(find.text('QUARTIERS'), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.scrollUntilVisible(find.text('Joueurs'), 250,
-          scrollable: find.byType(Scrollable).first);
-      await tester.tap(find.text('Joueurs'));
+      await c.leave();
       await tester.pumpAndSettle();
-      expect(find.text('À la table'), findsOneWidget);
+      expect(find.text('Jouer contre le robot'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

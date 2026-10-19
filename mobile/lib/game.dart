@@ -97,6 +97,46 @@ class GameApi {
   void close() => _client.close();
 }
 
+/// Only the packaged game's state/action routes can use the native session.
+class RendererTransport {
+  RendererTransport(this.api, this.session);
+  final GameApi api;
+  final Json session;
+
+  Future<Json> handle(Json request) async {
+    Json response(int status, Json body) =>
+        {'status': status, 'body': jsonEncode(body)};
+    try {
+      final uri = api.server.resolve(request['url'] as String);
+      final method = request['method'];
+      if (uri.origin != api.server.origin ||
+          uri.userInfo.isNotEmpty ||
+          !((method == 'GET' &&
+                  ['/api/state', '/api/health'].contains(uri.path)) ||
+              (method == 'POST' && uri.path == '/api/action'))) {
+        return response(403, {'error': 'Requête non autorisée.'});
+      }
+      final result = await api.request(
+        uri.path,
+        query: method == 'GET' && uri.path == '/api/state'
+            ? {
+                'code': session['code'] as String,
+                'token': session['token'] as String
+              }
+            : null,
+        data: method == 'POST'
+            ? {...jsonDecode(request['body'] as String) as Json, ...session}
+            : null,
+      );
+      return response(200, result);
+    } on ApiException catch (error) {
+      return response(400, {'error': error.message});
+    } catch (_) {
+      return response(400, {'error': 'Requête du jeu invalide.'});
+    }
+  }
+}
+
 class GameState {
   GameState(this.json);
   final Json json;
@@ -167,6 +207,7 @@ class GameController extends ChangeNotifier {
   final List<Json> cards = [];
   String get server => _api?.server.toString() ?? '';
   String get code => _session?['code'] as String? ?? '';
+  Json get gameSession => Map<String, dynamic>.unmodifiable(_session ?? {});
   String get savedServer =>
       preferences.getString('server') ??
       const String.fromEnvironment(
