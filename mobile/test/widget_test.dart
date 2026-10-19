@@ -46,6 +46,10 @@ void main() {
           gameViewBuilder: (game, onHome) =>
               const Center(child: Text('Rendu original embarqué'))));
       await tester.pump();
+      expect(find.text('Reprendre ma partie'), findsOneWidget);
+      expect(find.text('Rendu original embarqué'), findsNothing);
+      await tester.tap(find.text('Reprendre ma partie'));
+      await tester.pump();
       expect(find.text('Rendu original embarqué'), findsOneWidget);
       expect(find.text('QUARTIERS'), findsNothing);
       expect(tester.takeException(), isNull);

@@ -56,3 +56,9 @@ cd /workspace/Monopoly-APK/mobile
 ```
 
 Réutiliser le checkout existant : chaque tâche cloud est déjà isolée, sans worktree supplémentaire. Les outils et caches sont conservés dans `/workspace/toolchains`. Relancer les processus nécessaires après restauration. Le retour à l’accueil oublie la session locale mais ne supprime pas le joueur distant ; son absence peut bloquer son tour.
+
+## Compatibilité du démarrage
+
+La version 1.0.2 affiche son premier écran avant d’attendre les réglages natifs. L’attente est limitée à dix secondes ; en cas d’échec un bouton permet de réessayer sans effacer les données. L’implémentation Android de shared_preferences est fixée à 2.4.28 pour conserver les canaux de plateforme et éviter le nouveau chemin JNI pendant l’initialisation. Le moteur Flutter utilise Skia plutôt qu’Impeller pour la compatibilité des pilotes graphiques. Le rendu du plateau reste inchangé. Les tests de démarrage contrôlent les cas d’attente et d’échec du stockage. La correction doit être confirmée sur le Xiaomi 12 Pro Android 15 ayant signalé l’écran blanc.
+
+L’accueil est toujours présenté au lancement, y compris après la restauration d’une session : le bouton « Reprendre ma partie » ouvre ensuite le jeu. Un délai limite protège aussi le chargement du rendu embarqué, avec les boutons de reprise et d’accueil.

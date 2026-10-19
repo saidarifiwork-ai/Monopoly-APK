@@ -27,6 +27,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
   String? failure;
   bool loading = true;
   bool ready = false;
+  Timer? loadTimeout;
   late final GameApi api;
   late final RendererTransport transport;
 
@@ -40,6 +41,13 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
   }
 
   Future<void> initialize() async {
+    loadTimeout?.cancel();
+    loadTimeout = Timer(const Duration(seconds: 15), () {
+      if (mounted && !ready) {
+        setState(() => failure =
+            'Le chargement du jeu ne répond pas. Réessayez ou revenez à l’accueil.');
+      }
+    });
     try {
       final controller = WebViewController();
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
@@ -76,6 +84,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
         },
         onWebResourceError: (error) {
           if (mounted && error.isForMainFrame == true) {
+            loadTimeout?.cancel();
             setState(() => failure = 'Le jeu n’a pas pu être chargé.');
           }
         },
@@ -84,6 +93,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
       setState(() => web = controller);
       await controller.loadFlutterAsset('assets/game/index.html');
     } catch (_) {
+      loadTimeout?.cancel();
       if (mounted) {
         setState(() => failure =
             'Impossible de charger le jeu sur cet appareil. Mettez Android System WebView à jour.');
@@ -111,6 +121,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
           unawaited(forward(Map<String, dynamic>.from(payload)));
         }
       case 'loaded':
+        loadTimeout?.cancel();
         setState(() {
           loading = false;
           ready = true;
@@ -124,6 +135,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
       case 'expired':
         unawaited(widget.game.leave());
       case 'error':
+        loadTimeout?.cancel();
         setState(
             () => failure = 'Les fichiers du jeu n’ont pas pu être chargés.');
     }
@@ -156,6 +168,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
 
   @override
   void dispose() {
+    loadTimeout?.cancel();
     api.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

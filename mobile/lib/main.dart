@@ -10,10 +10,80 @@ const ink = Color(0xFF183C33);
 const cream = Color(0xFFF7F2E7);
 const gold = Color(0xFFE7BC59);
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  runApp(QuartiersApp(controller: GameController(prefs)));
+  runApp(const AppStartup());
+}
+
+/// Paint a first frame before invoking native storage, including after updates.
+class AppStartup extends StatefulWidget {
+  const AppStartup({super.key, this.loadPreferences});
+  final Future<SharedPreferences> Function()? loadPreferences;
+  @override
+  State<AppStartup> createState() => _AppStartupState();
+}
+
+class _AppStartupState extends State<AppStartup> {
+  late Future<SharedPreferences> preferences;
+  GameController? game;
+  @override
+  void initState() {
+    super.initState();
+    preferences = load();
+  }
+
+  Future<SharedPreferences> load() async {
+    await WidgetsBinding.instance.endOfFrame;
+    return Future<SharedPreferences>.sync(
+      widget.loadPreferences ?? SharedPreferences.getInstance,
+    ).timeout(const Duration(seconds: 10));
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<SharedPreferences>(
+        future: preferences,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            game ??= GameController(snapshot.requireData);
+            return QuartiersApp(controller: game!);
+          }
+          return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: Scaffold(
+                backgroundColor: cream,
+                body: SafeArea(
+                    child: Center(
+                        child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Text('QUARTIERS MAROC',
+                        style: TextStyle(
+                            fontSize: 24,
+                            color: ink,
+                            fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 24),
+                    if (!snapshot.hasError) ...[
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      const Text('Ouverture de votre table…'),
+                    ] else ...[
+                      const Text(
+                          'L’application n’a pas pu lire ses réglages. Vos données n’ont pas été effacées.',
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                          onPressed: () {
+                            setState(() {
+                              preferences = load();
+                            });
+                          },
+                          child: const Text('Réessayer')),
+                    ],
+                  ]),
+                ))),
+              ));
+        },
+      );
 }
 
 typedef GameViewBuilder = Widget Function(
@@ -82,6 +152,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   late final TextEditingController name;
   final room = TextEditingController();
   bool leaving = false;
+  bool gameOpened = false;
   bool settingsOpen = false;
   @override
   void initState() {
@@ -94,6 +165,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
 
   void onChange() {
     if (!mounted) return;
+    if (c.state == null) gameOpened = false;
     // The original renderer owns polling and animations while a game is open.
     c.pause(c.state != null);
     setState(() {});
@@ -175,6 +247,9 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
       return;
     }
     await c.enter(name.text, solo: solo, room: join ? room.text : null);
+    if (mounted && c.state != null && c.error == null) {
+      setState(() => gameOpened = true);
+    }
   }
 
   void message(String value) {
@@ -219,7 +294,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final state = c.state;
+    final state = gameOpened ? c.state : null;
     return PopScope(
       canPop: state == null,
       onPopInvokedWithResult: (didPop, result) {
@@ -267,6 +342,16 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (c.state != null) ...[
+                    FilledButton.icon(
+                      onPressed: c.busy
+                          ? null
+                          : () => setState(() => gameOpened = true),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Reprendre ma partie'),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Container(
                     padding: const EdgeInsets.all(26),
                     decoration: BoxDecoration(

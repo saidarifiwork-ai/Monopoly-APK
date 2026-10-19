@@ -282,6 +282,8 @@ class GameController extends ChangeNotifier {
           if (solo) 'mode': 'solo',
         },
       );
+      state = null;
+      _paused = false;
       _lastEvent = 0;
       await preferences.setString('name', name.trim());
       await preferences.setString(
