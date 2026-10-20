@@ -19,6 +19,7 @@ explicite de l'utilisateur.
 - Pour livrer une modification embarquée, augmenter la version Android, compiler
   un APK ARM64, conserver la signature des APK publiés, publier le fichier et sa
   somme SHA-256 dans `downloads/`, puis vérifier le téléchargement distant.
+  Actualiser aussi la version affichée près du lien APK dans `index.html`.
   Une compilation CI avec une nouvelle clé debug ne constitue pas une mise à jour
   installable par-dessus les APK déjà distribués.
 - Le serveur commun de production est `https://monopoly-bw6e.onrender.com`.
