@@ -2,8 +2,9 @@
 
 Le joueur arrivé sur un terrain, une gare ou une compagnie libre peut acheter
 au prix normal ou choisir « Mettre aux enchères ». Terminer le tour sans acheter
-lance aussi les enchères. Si le joueur ne dispose pas du prix normal à son arrivée,
-elles commencent automatiquement. Une dette doit être réglée avant d'enchérir.
+lance aussi les enchères. Si le joueur ne dispose pas du prix normal, il peut d’abord hypothéquer ses biens
+pour réunir la somme : aucune enchère ne démarre automatiquement à l’arrivée.
+Une dette doit être réglée avant d’enchérir.
 
 Tous les joueurs encore en partie peuvent participer, y compris celui arrivé sur
 le bien. Chacun répond à son tour : offre en DH entiers supérieure à la meilleure

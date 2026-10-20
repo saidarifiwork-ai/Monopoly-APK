@@ -885,13 +885,6 @@ function invokeGameAction(s, p, data) {
             }
             
             if (p.out) nextTurn(s);
-            else {
-                const landed = s.tiles[p.pos];
-                if (s.phase === 'playing' && !p.jail && s.rolled && !s.debts.length && landed.price > 0 && !landed.owner && p.money < landed.price) {
-                    const message = auction.start(s, p);
-                    addLog(s, message || 'Enchères pour ' + landed.name + ' : première offre dès 1 DH.');
-                }
-            }
             break;
             
         case 'auction': {

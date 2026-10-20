@@ -8,11 +8,11 @@ const money=n=>Number(n).toLocaleString('fr-FR');
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : (window.API_URL || '');
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
 async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
-function resetView(){generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
+function resetView(){document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 function formatTime(seconds){if(seconds>=60)return Math.floor(seconds/60)+'m '+seconds%60+'s';return seconds+'s'}
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
 async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
-function resetView(){generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
+function resetView(){document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 async function enter(create,mode){
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
@@ -105,7 +105,15 @@ function renderActions(){
   if((me.jailTurns||0)>=2)addButton('#actions','T3 : payer 50 DH et lancer les dés','payjail');
   else{addButton('#actions','Tenter un double · gratuit','roll');addButton('#actions','Payer 50 DH et lancer les dés','payjail',null,true)}
  }else addButton('#actions',me.jailDouble?'Sortie de prison : lancer pour avancer 🎲':'Lancer les dés 🎲','roll');
-}else{const t=s.tiles[me.pos];if(!s.auctioned&&t.price&&!t.owner&&me.money>=t.price)addButton('#actions','Acheter '+t.name+' · '+t.price+' DH','buy');if(!s.auctioned&&t.price&&!t.owner&&!me.jail)addButton('#actions','Mettre aux enchères','auction');addButton('#actions',s.dice[0]===s.dice[1]&&!me.jail&&!me.jailDouble?'Rejouer mon double →':'Terminer mon tour →','end',null,true)}}
+}else{const t=s.tiles[me.pos];if(!s.auctioned&&t.price&&!t.owner){
+ addButton('#actions','Acheter '+t.name+' · '+t.price+' DH','buy');$('#actions button:last-child').disabled=busy||animating||me.money<t.price;
+ const mortgage=document.createElement('button');mortgage.className='secondary';mortgage.textContent='Hypothéquer mes biens';mortgage.disabled=busy||animating; mortgage.onclick=()=>{
+  const owned=s.tiles.map((tile,index)=>({tile,index})).filter(x=>x.tile.owner===me.id&&x.tile.price>0&&!x.tile.mortgaged);
+  if(!owned.length){toast('Aucun bien disponible à hypothéquer.');return}
+  selected=owned[0].index;renderSelection();document.querySelector('.mobile-tabs button:nth-child(2)')?.click();$('#property-panel').scrollIntoView({block:'nearest',behavior:'smooth'});
+ };$('#actions').append(mortgage);
+ if(me.money<t.price){const help=document.createElement('p');help.textContent='Hypothéquez vos biens pour réunir le prix, ou choisissez les enchères.';$('#actions').append(help)}
+ }if(!s.auctioned&&t.price&&!t.owner&&!me.jail)addButton('#actions','Mettre aux enchères','auction');addButton('#actions',s.dice[0]===s.dice[1]&&!me.jail&&!me.jailDouble?'Rejouer mon double →':'Terminer mon tour →','end',null,true)}}
  if(s.phase==='playing'&&(current.bot||animating)){$('#actions').insertAdjacentHTML('beforeend','<div class="thinking"><span></span><span></span><span></span> '+(animating?'Action en cours':'Le robot réfléchit')+'</div>')}
  if(s.phase==='playing'&&current.id===me.id&&!me.jail&&!s.debts?.length)$('#actions').insertAdjacentHTML('beforeend','<small class="keyboard-hint"><kbd>Espace</kbd> : '+(s.rolled?'terminer le tour':'lancer les dés')+'</small>');
  renderSelection();
@@ -135,7 +143,7 @@ function renderSelection(){
  }
 }
 function render(){
- if(!state)return;const s=state,current=s.players[s.turn];$('#welcome').hidden=true;$('#game').hidden=false;$('#room-code').textContent=session.code;$('#player-count').textContent=s.players.length+' / 6';
+ if(!state)return;const s=state,current=s.players[s.turn];showVictory(s);$('#welcome').hidden=true;$('#game').hidden=false;$('#room-code').textContent=session.code;$('#player-count').textContent=s.players.length+' / 6';
  $('#players').innerHTML=s.players.map((p,i)=>{
    let statusText = p.out ? 'Faillite' : p.jail ? 'En prison' : p.pos === 10 ? 'Simple visite' : pawnNames[i] + (p.bot ? ' · robot' : '');
 
@@ -214,6 +222,16 @@ const gameSound={
   g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(level,at+.006);g.gain.exponentialRampToValueAtTime(.0001,at+duration);
   o.connect(g);g.connect(this.master);o.start(at);o.stop(at+duration+.02);o.onended=()=>{o.disconnect();g.disconnect()};
  },
+ applause(){
+  const c=this.ctx;
+  for(let i=0;i<18;i++){
+   const buffer=c.createBuffer(1,Math.floor(c.sampleRate*.12),c.sampleRate),data=buffer.getChannelData(0);
+   for(let j=0;j<data.length;j++)data[j]=(Math.random()*2-1)*(1-j/data.length)**3;
+   const source=c.createBufferSource(),gain=c.createGain(),filter=c.createBiquadFilter();
+   filter.type='bandpass';filter.frequency.value=1400;gain.gain.value=.12;source.buffer=buffer;source.connect(filter);filter.connect(gain);gain.connect(this.master);
+   source.start(c.currentTime+1+i*.075);source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect()};
+  }
+ },
  play(kind){
   if(!kind||this.muted||!this.volume||document.hidden||this.ctx?.state!=='running')return;
   try{
@@ -227,7 +245,8 @@ const gameSound={
     case 'build':t(180,0,.09,'triangle',.16,65);t(240,.18,.1,'triangle',.12,80);break;
     case 'jail':t(110,0,.28,'triangle',.15,45);t(650,.03,.12,'sine',.07,280);break;
     case 'turn':t(523,0,.18);t(784,.2,.25);break;
-    case 'win':[523,659,784,1047].forEach((f,i)=>t(f,i*.17,.35,'sine',.14));break;
+    case 'win':break; // The victory dialog plays its fanfare once.
+    case 'celebration':[523,659,784,1047,784,1047].forEach((f,i)=>t(f,i*.2,.4,'triangle',.12));this.applause();break;
    }
   }catch{/* An unavailable audio device does not stop an animation. */}
  }
@@ -245,3 +264,24 @@ document.addEventListener('keydown',e=>{
  if(state.phase==='opening'){e.preventDefault();action('orderroll');return}
  e.preventDefault();const me=state.players.find(p=>p.id===state.me);if(!state.rolled&&me.jail){toast('Choisissez : carte, tentative de double ou paiement.');return}action(state.rolled?'end':'roll');
 });
+
+// One celebration per finished room; polling must never replay it.
+const celebratedRooms=new Set();
+function showVictory(s){
+ if(s.phase!=='finished')return;
+ const winner=s.players[s.turn],key=(session?.code||s.code)+':'+winner.id;
+ if(celebratedRooms.has(key))return;
+ celebratedRooms.add(key);
+ let alreadySeen=false;try{alreadySeen=sessionStorage.getItem('quartiers-win:'+key)==='yes';sessionStorage.setItem('quartiers-win:'+key,'yes')}catch{}
+ if(alreadySeen)return;
+ let dialog=document.querySelector('#victory-dialog');
+ if(!dialog){dialog=document.createElement('dialog');dialog.id='victory-dialog';dialog.className='victory-dialog';dialog.setAttribute('aria-labelledby','victory-title');
+ dialog.innerHTML='<div class="victory-confetti" aria-hidden="true"></div><div class="victory-cup" aria-hidden="true">🏆</div><p class="eyebrow">CHAMPION DU MAROC</p><div class="victory-pawn" aria-hidden="true"></div><h2 id="victory-title"></h2><p>Une belle victoire. Bravo au champion !</p><button type="button">Voir le plateau</button>';
+ dialog.querySelector('button').onclick=()=>dialog.close();document.body.append(dialog)}
+ dialog.querySelector('h2').textContent=winner.name+' remporte la partie !';
+ const pawn=dialog.querySelector('.victory-pawn'),index=s.players.indexOf(winner);pawn.innerHTML=art(pawnArts[index]);pawn.style.color=colors[index];
+ const confetti=dialog.querySelector('.victory-confetti');confetti.replaceChildren();
+ if(!reduced)for(let i=0;i<48;i++){const bit=document.createElement('span');bit.style.setProperty('--x',(i*37%100)+'%');bit.style.setProperty('--delay',(i%12)*.1+'s');bit.style.setProperty('--rotation',(i*57)+'deg');bit.style.background=i%2?'#087f49':'#d63c39';confetti.append(bit)}
+ if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+ gameSound.play('celebration');
+}

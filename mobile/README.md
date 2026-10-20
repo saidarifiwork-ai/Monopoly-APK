@@ -66,3 +66,5 @@ L’accueil est toujours présenté au lancement, y compris après la restaurati
 ## Joueurs absents
 
 Le [relais par robot temporaire](../docs/DECONNEXIONS.md) est commun au site et à l’application. Le bouton Quitter demande confirmation et conserve la session pour reprendre sa place.
+
+La version 1.0.7 permet d’hypothéquer avant l’achat ou les enchères. Une célébration « Champion du Maroc » accompagne la victoire, avec le son selon les réglages du joueur.

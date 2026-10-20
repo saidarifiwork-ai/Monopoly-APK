@@ -109,3 +109,9 @@ body:has(#welcome:not([hidden])) footer{display:none}
 .opening-results{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}.opening-results li{display:flex;justify-content:space-between;gap:10px;font-size:12px}.opening-results span{color:var(--red);text-align:right}.turn-rank{font-weight:700}
 
 .apk-download{color:var(--ink);font-size:12px;text-align:center;text-decoration:underline;padding:8px}
+
+.victory-dialog{box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:2px solid #dfb652;border-radius:24px;background:#fff8e8;color:#183c33;text-align:center;padding:32px 24px;box-shadow:0 24px 90px #0007}
+.victory-dialog::backdrop{background:#102b24b8;backdrop-filter:blur(3px)}
+.victory-dialog h2{font-size:clamp(24px,6vw,34px);line-height:1.15;overflow-wrap:anywhere;margin:14px 0}.victory-dialog>p{position:relative}.victory-dialog button{position:relative;margin-top:14px;min-height:44px}.victory-cup{font-size:88px;line-height:1.2;filter:drop-shadow(0 8px 12px #d8a52e55);position:relative}.victory-pawn{height:62px;margin:12px auto;width:72px;position:relative}.victory-pawn svg{width:100%;height:100%}.victory-confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:22px}.victory-confetti span{position:absolute;top:-24px;left:var(--x);width:9px;height:16px;animation:victory-fall 4s var(--delay) ease-in forwards}
+@keyframes victory-fall{from{transform:translateY(-20px) rotate(0);opacity:1}to{transform:translateY(650px) rotate(var(--rotation));opacity:0}}
+@media(prefers-reduced-motion:reduce){.victory-confetti{display:none}}

@@ -55,9 +55,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: node --test test/*.test.js
-        working-directory: .
       - run: npm ci
+        working-directory: .
+      - run: node --test test/*.test.js
         working-directory: .
       - run: python3 tool/sync_game_assets.py
       - name: Verify committed mobile renderer matches the web
