@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s),colors=['#d9483b','#4383bc','#bd8b32','#986ab6','#408558','#bc617b'];
-let session=null;try{session=JSON.parse(sessionStorage.getItem('quartiers')||'null')}catch{sessionStorage.removeItem('quartiers')}
+let session=null;try{session=JSON.parse((sessionStorage.getItem('quartiers')||localStorage.getItem('quartiers'))||'null')}catch{sessionStorage.removeItem('quartiers')}
+let suspended=localStorage.getItem('quartiers-paused')==='yes';
 let state=null,selected=-1,busy=false,animating=false,pollPromise=null,lastEvent=0,generation=0,cardResolve=null;
 const positions=new Map(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -15,14 +16,14 @@ function resetView(){generation++;state=null;selected=-1;lastEvent=0;positions.c
 async function enter(create,mode){
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
- try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode});resetView();session={code:result.code,token:result.token};sessionStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
+ try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode});suspended=false;localStorage.removeItem('quartiers-paused');resetView();session={code:result.code,token:result.token};sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
 }
 async function action(type,index,extra={}){
  if(busy||animating)return;busy=true;render();
  try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type,index,...extra});await poll(true)}catch(e){toast(e.message)}finally{busy=false;if(state)render()}
 }
 function poll(force=false){
- if(pollPromise)return pollPromise;if(!session||busy&&!force)return Promise.resolve();const ticket=generation,activeSession=session;
+ if(pollPromise)return pollPromise;if(!session||suspended||busy&&!force)return Promise.resolve();const ticket=generation,activeSession=session;
  pollPromise=(async()=>{try{
   const next=await api('/api/state?code='+activeSession.code+'&token='+activeSession.token);if(ticket!==generation)return;
   $('#connection').textContent='● Connecté · salon privé';
@@ -32,7 +33,7 @@ function poll(force=false){
    for(const event of events){if(ticket!==generation)return;await playEvent(event,next,ticket);lastEvent=event.id}
   }
   if(ticket!==generation)return;if(next.phase==='playing'&&next.players[next.turn].id===next.me&&(state.players[state.turn].id!==next.me||!state.rolled&&state.phase==='lobby'))gameSound.play('turn');state=next;state.players.forEach(p=>positions.set(p.id,p.pos));animating=false;document.body.classList.remove('animating');$('#activity').classList.remove('busy');render();
- }catch(e){if(ticket!==generation)return;$('#connection').textContent='● Connexion interrompue';animating=false;document.body.classList.remove('animating');if(e.message==='Salon introuvable'||e.message==='Session invalide.'){session=null;sessionStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false;toast('Le plateau a été mis à jour. Créez une nouvelle partie.')}else{toast('Connexion au serveur interrompue. Vérifiez Lancer.cmd.')}}})().finally(()=>{pollPromise=null});return pollPromise;
+ }catch(e){if(ticket!==generation)return;$('#connection').textContent='● Connexion interrompue';animating=false;document.body.classList.remove('animating');if(e.message==='Salon introuvable'||e.message==='Session invalide.'){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false;toast('Le plateau a été mis à jour. Créez une nouvelle partie.')}else{toast('Connexion au serveur interrompue. Vérifiez Lancer.cmd.')}}})().finally(()=>{pollPromise=null});return pollPromise;
 }
 function announce(text,playerId){$('#activity-text').textContent=text;if(playerId){document.querySelectorAll('.player').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId));document.querySelectorAll('.pawn').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId))}}
 async function playEvent(e,next,ticket){
@@ -124,10 +125,11 @@ function render(){
    let statusText = p.out ? 'Faillite' : p.jail ? 'En prison' : p.pos === 10 ? 'Simple visite' : pawnNames[i] + (p.bot ? ' · robot' : '');
 
    // Add inactivity warning
-   if (!p.bot && !p.out && p.timeoutSeconds !== undefined && p.timeoutSeconds < 60) {
-     statusText += ` ⏱️ ${p.timeoutSeconds}s`;
+   if (p.connectionStatus === 'disconnected') {
+     statusText += ` · Déconnecté · robot dans ${formatTime(p.timeoutSeconds)}`;
    }
 
+   if (p.connectionStatus === 'replaced') statusText = 'Robot temporaire · retour possible';
    return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.timeoutSeconds && p.timeoutSeconds < 60 ? 'warning' : ''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span><small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
  }).join('');
  makeBoard(s);updateTiles(s);updatePawns(s);if(!animating)showDice(s.dice);$('#turn').textContent=s.phase==='lobby'?'En attente des joueurs':s.phase==='finished'?'🏆 '+current.name:current.name+(current.id===s.me?' · à vous de jouer':current.bot?' · robot':' · à son tour');
@@ -137,7 +139,16 @@ function render(){
  if(!animating)announce(s.phase==='lobby'?'Le salon est prêt. Invitez vos amis ou ajoutez un robot.':s.phase==='finished'?'🏆 '+current.name+' remporte la partie !':current.id===s.me?(s.rolled?'À vous : achetez, construisez ou terminez votre tour.':'À vous de lancer les dés !'):current.bot?'🤖 '+current.name+' prépare son prochain coup…':current.name+' joue.',current.id);
 }
 $('#solo').onclick=()=>enter(true,'solo');$('#create').onclick=()=>enter(true);$('#entry').onsubmit=e=>{e.preventDefault();enter(false)};$('#code').value=new URLSearchParams(location.search).get('room')||'';
-$('#home').onclick=()=>{if(busy||animating){toast('Attendez la fin de cette action.');return}if(state?.phase==='playing'&&!confirm('Revenir à l’accueil ? Vous quitterez cette partie.'))return;session=null;sessionStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false};
+const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session;$('#entry').prepend(resumeButton);
+resumeButton.onclick=()=>{suspended=false;localStorage.removeItem('quartiers-paused');poll(true)};
+$('#home').textContent='Quitter la partie';
+$('#home').onclick=async()=>{
+ if(busy||animating){toast('Attendez la fin de cette action.');return}
+ if(!confirm('Quitter la partie ? Un robot prendra le relais. Vous pourrez reprendre votre place sur cet appareil.'))return;
+ busy=true;suspended=true;
+ try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'});localStorage.setItem('quartiers-paused','yes');resetView();$('#game').hidden=true;$('#welcome').hidden=false;resumeButton.hidden=false}
+ catch(e){suspended=false;toast(e.message)}finally{busy=false}
+};
 $('#invite').onclick=async()=>{const url=location.origin+'/?room='+session.code;try{await navigator.clipboard.writeText(url);toast('Lien copié : '+url)}catch{toast(url)}};
 $('#close-card').onclick=closeCard;document.addEventListener('keydown',e=>{if(!$('#card-overlay').hidden){if(e.key==='Escape')closeCard();if(e.key==='Tab'){e.preventDefault();$('#close-card').focus()}}});
 $('#welcome-car').innerHTML=art('car');$('#chest-art').innerHTML=art('chest');$('#skyline').innerHTML=skylineArt;new ResizeObserver(()=>{if(state)state.players.forEach(p=>placePawn(p))}).observe($('#board'));

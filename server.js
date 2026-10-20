@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const presence = require('./presence');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -12,7 +13,7 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // Game state storage with persistence
-const STORAGE_FILE = '/tmp/monopoly-rooms.json';
+const STORAGE_FILE = process.env.ROOMS_FILE || '/tmp/monopoly-rooms.json';
 let rooms = new Map();
 
 // Load rooms from storage on startup
@@ -1050,6 +1051,24 @@ function invokeBotStep(s) {
     invokeGameAction(s, p, {type: 'end'});
 }
 
+function updatePresence(s) {
+    for (const p of presence.sweep(s)) {
+        addLog(s, p.name + ' est absent : un robot prend le relais.');
+    }
+}
+
+// Run independently from requests so a closed client cannot stop detection.
+setInterval(() => {
+    for (const s of rooms.values()) {
+        try {
+            updatePresence(s);
+            if (s.players.some(p => presence.status(s, p) === 'online')) invokeBotStep(s);
+        } catch (error) {
+            console.error('Presence update:', error.message);
+        }
+    }
+}, 1000).unref();
+
 // API Routes
 app.get('/api/health', (req, res) => {
     res.json({app: 'quartiers', version: 10});
@@ -1086,6 +1105,7 @@ app.post('/api/create', (req, res) => {
             offer: null
         };
         
+        presence.touch(s, p);
         rooms.set(code, s);
         
         if (req.body.mode === 'solo') {
@@ -1109,6 +1129,7 @@ app.post('/api/join', (req, res) => {
         
         const p = newPlayer(req.body.name);
         s.players.push(p);
+        presence.touch(s, p);
         addLog(s, p.name + ' rejoint la table.');
         
         res.json({code: s.code, token: p.token});
@@ -1122,63 +1143,8 @@ app.get('/api/state', (req, res) => {
         const s = getRoom(req.query.code);
         const p = getPlayer(s, req.query.token);
         
-        // Mark player as active (last seen time)
-        if (!s.lastSeen) s.lastSeen = {};
-        s.lastSeen[p.id] = Date.now();
-
-        // Check for disconnected players (inactive for more than 2 minutes)
-        if (s.phase === 'playing' && !s.checkingDisconnect) {
-            s.checkingDisconnect = true;
-            const timeout = 120000; // 2 minutes
-
-            for (const player of s.players) {
-                if (!player.out && !player.bot && s.lastSeen[player.id]) {
-                    const inactive = Date.now() - s.lastSeen[player.id];
-
-                    if (inactive > timeout) {
-                        // Player disconnected - return properties to bank
-                        announce(s, player, player.name + ' a quitté la partie. Ses biens retournent à la banque.');
-
-                        for (const t of s.tiles) {
-                            if (t.owner === player.id) {
-                                t.owner = '';
-                                t.level = 0;
-                                t.mortgaged = false;
-                            }
-                        }
-
-                        player.out = true;
-                        player.money = 0;
-
-                        // Remove from debts
-                        if (s.debts) {
-                            s.debts = s.debts.filter(d => d.player !== player.id);
-                        }
-
-                        // Cancel offers involving this player
-                        if (s.offer && (s.offer.buyer === player.id || s.offer.seller === player.id)) {
-                            s.offer = null;
-                            addLog(s, 'Négociation annulée : un joueur a quitté.');
-                        }
-
-                        // Next turn if it was their turn
-                        if (s.players[s.turn].id === player.id) {
-                            nextTurn(s);
-                        }
-
-                        // Check if game is over
-                        const alive = s.players.filter(x => !x.out);
-                        if (alive.length === 1) {
-                            s.phase = 'finished';
-                            s.turn = s.players.indexOf(alive[0]);
-                            announce(s, alive[0], alive[0].name + ' gagne !', 'win');
-                        }
-                    }
-                }
-            }
-
-            s.checkingDisconnect = false;
-        }
+        if (presence.touch(s, p)) addLog(s, p.name + ' reprend sa place au robot.');
+        updatePresence(s);
 
         invokeBotStep(s);
         
@@ -1197,13 +1163,10 @@ app.get('/api/state', (req, res) => {
                 }
             }
 
-            // Add inactivity timer for non-bot players
-            if (!player.bot && !player.out && s.lastSeen[player.id]) {
-                const inactive = Date.now() - s.lastSeen[player.id];
-                const timeout = 120000; // 2 minutes
-                const remaining = Math.max(0, timeout - inactive);
-                copy.inactiveSeconds = Math.floor(inactive / 1000);
-                copy.timeoutSeconds = Math.floor(remaining / 1000);
+            copy.connectionStatus = presence.status(s, player);
+            if (!player.out && (!player.bot || player.temporaryBot)) {
+                copy.timeoutSeconds = Math.ceil(Math.max(0, presence.TAKEOVER_MS -
+                    (Date.now() - (s.lastSeen?.[player.id] ?? Date.now()))) / 1000);
             }
 
             return copy;
@@ -1221,7 +1184,16 @@ app.post('/api/action', (req, res) => {
         const s = getRoom(req.body.code);
         const p = getPlayer(s, req.body.token);
         
-        invokeGameAction(s, p, req.body);
+        if (req.body.type === 'leave') {
+            if (presence.replace(p)) {
+                if (s.players[s.turn]?.id === p.id) { s.botPhase = 'buy'; s.botNext = 0; }
+                addLog(s, p.name + ' quitte la table : un robot prend le relais.');
+            }
+        } else {
+            if (presence.touch(s, p)) addLog(s, p.name + ' reprend sa place au robot.');
+            updatePresence(s);
+            invokeGameAction(s, p, req.body);
+        }
         
         res.json({ok: true});
     } catch (error) {

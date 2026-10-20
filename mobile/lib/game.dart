@@ -403,6 +403,17 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  Future<void> relinquish() async {
+    if (_api == null || _session == null) return;
+    pause(true);
+    await _polling;
+    try {
+      await _api!.request('/api/action', data: {..._session!, 'type': 'leave'});
+    } catch (_) {
+      rethrow;
+    }
+  }
+
   Future<void> leave() async {
     _generation++;
     _timer?.cancel();

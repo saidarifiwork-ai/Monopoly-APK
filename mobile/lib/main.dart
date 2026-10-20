@@ -283,9 +283,16 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     if (leaving) return;
     leaving = true;
     try {
-      if (await confirm('Revenir à l’accueil ?',
-          'Votre place restera dans le salon, mais cet appareil oubliera sa session. Un joueur absent peut bloquer la partie.')) {
-        await c.leave();
+      if (await confirm('Quitter la partie ?',
+          'Un robot prendra le relais. Vous pourrez reprendre votre place depuis cet appareil.')) {
+        try {
+          // Dispose the renderer and stop its heartbeat before handing over.
+          if (mounted) setState(() => gameOpened = false);
+          await WidgetsBinding.instance.endOfFrame;
+          await c.relinquish();
+        } catch (_) {
+          if (mounted) message('Impossible de prévenir le serveur. Réessayez.');
+        }
       }
     } finally {
       leaving = false;

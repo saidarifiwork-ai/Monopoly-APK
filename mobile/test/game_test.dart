@@ -81,6 +81,42 @@ Json fixture() => {
     };
 
 void main() {
+  test('voluntary leave keeps the session and stops heartbeats until resume',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'server': 'https://test.example',
+      'session': jsonEncode({
+        'server': 'https://test.example',
+        'code': 'ABC234',
+        'token': 'private'
+      }),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final calls = <String>[];
+    final c = GameController(prefs,
+        apiFactory: (uri) => GameApi(uri, client: MockClient((r) async {
+              calls.add(r.url.path);
+              if (r.url.path == '/api/action') {
+                expect(jsonDecode(r.body),
+                    {'code': 'ABC234', 'token': 'private', 'type': 'leave'});
+                return http.Response('{"ok":true}', 200);
+              }
+              return http.Response(jsonEncode(fixture()), 200);
+            })));
+    await c.restore();
+    await c.relinquish();
+    final count = calls.length;
+    await c.poll();
+    expect(calls.length, count);
+    expect(c.code, 'ABC234');
+    expect(prefs.getString('session'), isNotNull);
+    expect(c.state, isNotNull);
+    c.pause(false);
+    await c.poll();
+    expect(calls.last, '/api/state');
+    c.dispose();
+  });
+
   test('Render is the default and replaces only the former default', () async {
     for (final previous in [null, 'https://monopoly-mauve-tau.vercel.app/']) {
       SharedPreferences.setMockInitialValues(

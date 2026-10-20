@@ -52,6 +52,7 @@ window.startQuartiers = async function (configuration) {
     toolbar.className = 'mobile-toolbar';
     document.body.prepend(toolbar);
     const home = document.querySelector('#home');
+    home.textContent = 'Quitter';
     home.onclick = () => post({type: 'home'});
     const invite = document.querySelector('#invite');
     invite.textContent = 'Inviter';

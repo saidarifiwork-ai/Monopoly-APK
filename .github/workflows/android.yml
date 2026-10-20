@@ -10,6 +10,8 @@ on:
       - 'style.css'
       - 'index.html'
       - 'server.js'
+      - 'presence.js'
+      - 'test/**'
       - 'package*.json'
       - 'mobile/**'
       - '.github/workflows/android.yml'
@@ -20,6 +22,8 @@ on:
       - 'style.css'
       - 'index.html'
       - 'server.js'
+      - 'presence.js'
+      - 'test/**'
       - 'package*.json'
       - 'mobile/**'
       - '.github/workflows/android.yml'
@@ -49,6 +53,8 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - run: node --test test/*.test.js
+        working-directory: .
       - run: npm ci
         working-directory: .
       - run: python3 tool/sync_game_assets.py

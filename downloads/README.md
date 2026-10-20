@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.4
+# Quartiers Maroc pour Android — version 1.0.5
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.4.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.5.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -27,3 +27,7 @@ Le serveur par défaut devient Render. Les anciennes installations utilisant l�
 ## Dépôt commun — version 1.0.4
 
 Les changements du dépôt web `Demnatikhalid/monopoly` (commit `aa97d1fb23d516acdf67c8bb3d44c36162e952c4`) sont intégrés au serveur et au rendu embarqué. Le plateau reste celui du site ; les indicateurs de joueurs inactifs sont partagés. Les 14 tests passent, y compris contre le serveur Node.js commun local. Une partie solo a aussi été ouverte dans Chromium avec 40 cases. Ces vérifications ne constituent pas un essai sur téléphone physique. Le raccordement du service Render à ce dépôt reste à effectuer selon [le guide](../docs/DEPOT-COMMUN.md).
+
+## Déconnexions — version 1.0.5
+
+Après 30 secondes sans requête, le joueur apparaît déconnecté ; après 2 minutes, un robot temporaire prend le relais en conservant ses biens. Le retour avec sa session rend le contrôle au joueur. « Quitter la partie » permet le relais immédiat avec confirmation et conserve la possibilité de reprendre sur le même appareil. Voir [le fonctionnement détaillé](../docs/DECONNEXIONS.md). Les tests de présence, de l’API et du navigateur sont effectués localement ; la mise à jour sur téléphone physique reste à vérifier.
