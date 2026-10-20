@@ -10,7 +10,7 @@ function engine(){
   return require(name.startsWith('.')?path.resolve(__dirname,'..',name):name);
  },process:{env:{}},console,setInterval:()=>({unref(){}}),Math:Object.assign(Object.create(Math),{random:()=>0})};
  vm.createContext(sandbox);
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.engine={invokeGameAction,newTiles,newPlayer};',sandbox);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.engine={invokeGameAction,invokeBotStep,newTiles,newPlayer};',sandbox);
  return sandbox.engine;
 }
 function fixture(e){const p=e.newPlayer('Saïd'),friend=e.newPlayer('Ami');p.id='a';friend.id='b';p.money=1;p.pos=4;const s={phase:'playing',turn:0,players:[p,friend],tiles:e.newTiles(),rolled:false,deals:[],debts:[],offer:null,log:[],events:[],eventSeq:0};s.tiles[5].owner=p.id;return {p,s};}
@@ -25,4 +25,14 @@ test('cash-poor arrival allows mortgage at half value, then normal purchase',()=
 });
 test('declining explicitly or ending without buying still opens auctions',()=>{
  for(const type of ['auction','end']){const e=engine(),{p,s}=fixture(e);e.invokeGameAction(s,p,{type:'roll'});e.invokeGameAction(s,p,{type});assert.equal(s.auction.index,6);}
+});
+
+test('manual auto persists through heartbeats, runs real bot actions, and rejects client bypasses',()=>{
+ const e=engine(),{p,s}=fixture(e);
+ e.invokeGameAction(s,p,{type:'autoplay',enabled:true});
+ assert.equal(p.bot,true);assert.equal(p.autoPlay,true);
+ assert.throws(()=>e.invokeGameAction(s,p,{type:'roll',botAction:true}));
+ s.botNext=0;e.invokeBotStep(s);assert.equal(p.pos,6);assert.equal(s.rolled,true);
+ e.invokeGameAction(s,p,{type:'autoplay',enabled:false});assert.equal(p.bot,false);assert.equal(p.autoPlay,undefined);
+ e.invokeGameAction(s,p,{type:'mortgage',index:5});assert.equal(p.money,101);
 });

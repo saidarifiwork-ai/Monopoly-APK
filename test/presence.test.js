@@ -38,3 +38,20 @@ test('old saved rooms get a grace period, finished games do not change', () => {
   room.phase='finished';p.bot=false;delete p.temporaryBot;
   assert.deepEqual(presence.sweep(room, 2000000), []);
 });
+
+test('manual auto is not cancelled by polling or reconnecting; toggle restores same player',()=>{
+ const player={id:'a',money:500,bot:false};const room={phase:'playing',turn:0,players:[player]};
+ presence.setAuto(room,player,true,0);
+ assert.equal(presence.touch(room,player,1000),false);
+ assert.equal(presence.touch(room,player,100000),false);
+ assert.equal(player.bot,true);assert.equal(player.autoPlay,true);assert.equal(player.money,500);
+ presence.setAuto(room,player,false,100001);
+ assert.equal(player.bot,false);assert.equal(player.autoPlay,undefined);assert.equal(player.temporaryBot,undefined);
+ assert.equal(player.money,500);
+});
+test('auto cannot be set on an eliminated player, a finished game or invalid value',()=>{
+ const p={id:'a',out:false};const room={phase:'playing',players:[p],turn:0};
+ assert.throws(()=>presence.setAuto(room,p,'true'));
+ p.out=true;assert.throws(()=>presence.setAuto(room,p,true));
+ p.out=false;room.phase='finished';assert.throws(()=>presence.setAuto(room,p,true));
+});

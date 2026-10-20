@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const presence = require('./presence');
 const auction = require('./auction');
+const BOT_ACTION = Symbol('bot action');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -736,6 +737,11 @@ function invokeFinanceAction(s, p, data) {
 }
 
 function invokeGameAction(s, p, data) {
+    if (data.type === 'autoplay') {
+        if (presence.setAuto(s, p, data.enabled)) addLog(s, p.name + (data.enabled ? ' active le mode auto.' : ' reprend le contrôle.'));
+        return;
+    }
+    if (p.autoPlay && !data[BOT_ACTION]) throw new Error('Désactivez le mode auto pour reprendre le contrôle.');
     if (s.auction) {
         if (!['bid', 'auctionpass'].includes(data.type)) throw new Error('Terminez les enchères avant de continuer.');
         const message = auction.respond(s, p, data.type, data.amount);
@@ -1043,7 +1049,7 @@ function invokeBotStep(s) {
         if (p.jail && p.jailCards.length > 0) {
             type = 'usejail';
         }
-        invokeGameAction(s, p, {type});
+        invokeGameAction(s, p, {[BOT_ACTION]: true, type});
         return;
     }
     
@@ -1051,7 +1057,7 @@ function invokeBotStep(s) {
         s.botPhase = 'build';
         const t = s.tiles[p.pos];
         if (!s.auctioned && t.price > 0 && !t.owner && p.money >= t.price + 150) {
-            invokeGameAction(s, p, {type: 'buy'});
+            invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'buy'});
             return;
         }
     }
@@ -1067,13 +1073,13 @@ function invokeBotStep(s) {
             
             const group = s.tiles.filter(x => x.group === t.group);
             if (group.filter(x => x.owner !== p.id || x.mortgaged || x.level < t.level).length === 0) {
-                invokeGameAction(s, p, {type: 'build', index: i});
+                invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'build', index: i});
                 return;
             }
         }
     }
     
-    invokeGameAction(s, p, {type: 'end'});
+    invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'end'});
 }
 
 function updatePresence(s) {
@@ -1092,7 +1098,7 @@ setInterval(() => {
                 if (message) addLog(s, message);
                 continue;
             }
-            if (s.players.some(p => presence.status(s, p) === 'online')) invokeBotStep(s);
+            if (s.players.some(p => (!p.out && p.autoPlay) || presence.status(s, p) === 'online')) invokeBotStep(s);
         } catch (error) {
             console.error('Presence update:', error.message);
         }
@@ -1215,6 +1221,7 @@ app.post('/api/action', (req, res) => {
         const p = getPlayer(s, req.body.token);
         
         if (req.body.type === 'leave') {
+            delete p.autoPlay;
             if (presence.replace(p)) {
                 if (s.players[s.turn]?.id === p.id) { s.botPhase = 'buy'; s.botNext = 0; }
                 addLog(s, p.name + ' quitte la table : un robot prend le relais.');

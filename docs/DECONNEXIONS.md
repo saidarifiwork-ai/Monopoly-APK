@@ -26,3 +26,17 @@ Les parties ne sont pas garanties après un redéploiement Render : le stockage
 `/tmp` reste temporaire. Le forfait gratuit peut également mettre le serveur en
 veille ; le suivi reprend à son réveil. Les clients web et APK doivent partager
 le même serveur pour voir ces états.
+
+## Pause volontaire : Mode auto
+
+Pendant le tirage de l’ordre ou la partie, chaque joueur voit « 🤖 Mode auto »
+près de son propre nom. Le robot prend immédiatement le relais quand la case
+est cochée. Elle reste cochée après une actualisation ou une reconnexion :
+il faut la décocher pour reprendre la place. Les actions manuelles sont bloquées
+pendant ce mode, mais sa désactivation reste autorisée. Le serveur ne permet pas
+de contrôler un autre joueur avec cette commande. Les robots peuvent continuer
+à jouer si tous les humains ont volontairement choisi le mode auto.
+
+« Quitter la partie » revient au mécanisme de déconnexion : au retour, la session
+authentifiée reprend automatiquement la place, sans imposer de décocher le mode
+auto.

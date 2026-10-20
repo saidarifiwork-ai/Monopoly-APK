@@ -115,3 +115,5 @@ body:has(#welcome:not([hidden])) footer{display:none}
 .victory-dialog h2{font-size:clamp(24px,6vw,34px);line-height:1.15;overflow-wrap:anywhere;margin:14px 0}.victory-dialog>p{position:relative}.victory-dialog button{position:relative;margin-top:14px;min-height:44px}.victory-cup{font-size:88px;line-height:1.2;filter:drop-shadow(0 8px 12px #d8a52e55);position:relative}.victory-pawn{height:62px;margin:12px auto;width:72px;position:relative}.victory-pawn svg{width:100%;height:100%}.victory-confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:22px}.victory-confetti span{position:absolute;top:-24px;left:var(--x);width:9px;height:16px;animation:victory-fall 4s var(--delay) ease-in forwards}
 @keyframes victory-fall{from{transform:translateY(-20px) rotate(0);opacity:1}to{transform:translateY(650px) rotate(var(--rotation));opacity:0}}
 @media(prefers-reduced-motion:reduce){.victory-confetti{display:none}}
+
+.auto-toggle{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;min-height:32px}.auto-toggle input{width:17px;height:17px;margin:0;accent-color:#087f49}

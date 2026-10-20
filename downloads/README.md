@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.7
+# Quartiers Maroc pour Android — version 1.0.8
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.7.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.8.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -39,3 +39,7 @@ Le robot prend le relais après 60 secondes d’absence (signalement après 30 s
 ## Achat et victoire — version 1.0.7
 
 Une arrivée sans argent suffisant ne lance plus automatiquement les enchères : « Hypothéquer mes biens » permet de réunir la somme, puis d’acheter au prix normal. Les enchères restent disponibles sur choix explicite ou en terminant le tour sans acheter. La victoire affiche une coupe, le pion du gagnant, des confettis rouges et verts et une fanfare avec applaudissements respectant le son et les animations réduites. L’interface et le raccourci d’hypothèque sont vérifiés dans Chromium à une taille de téléphone ; aucun essai physique Android n’est revendiqué.
+
+## Mode auto — version 1.0.8
+
+Une case « 🤖 Mode auto » apparaît près du nom du joueur connecté pendant le tirage de l’ordre et la partie. Cochée : le robot contrôle cette place. Décochée : le même joueur reprend le contrôle. Les actualisations et reconnexions ne désactivent pas ce choix. Le contrôle concerne uniquement la session authentifiée ; les biens restent ceux du joueur. Quatorze tests serveur et quinze tests Flutter/API passent ; le contrôle de la case est vérifié dans Chromium à une taille de téléphone. Aucun essai sur téléphone physique n’est revendiqué.

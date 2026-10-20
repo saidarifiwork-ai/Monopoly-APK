@@ -75,6 +75,7 @@ function renderActions(){
  const auctionKey=s.auction?[s.auction.index,s.auction.respondent,s.auction.amount,s.auction.deadline].join(':'):'';
  const keepAuction=!!auctionKey&&$('#actions').dataset.auctionKey===auctionKey;
  if(!keepAuction)$('#actions').replaceChildren();$('#actions').dataset.auctionKey=auctionKey;
+ if(me.autoPlay){$('#actions').replaceChildren();$('#actions').dataset.auctionKey='';$('#action-title').textContent='🤖 Mode auto';$('#status').textContent='Le robot joue pour vous. Décochez Mode auto pour reprendre.';$('#property-actions').replaceChildren();return}
  if(s.auction){
   const a=s.auction,t=s.tiles[a.index],respondent=s.players.find(p=>p.id===a.respondent),leader=s.players.find(p=>p.id===a.leader);
   $('#action-title').textContent='Enchères · '+t.name;
@@ -126,7 +127,7 @@ function propertySchedule(t,s){
  return `<div class="deed-details"><table class="deed-table"><caption>Constructions et loyers · DH</caption><thead><tr><th scope="col">État</th><th scope="col">Coût total*</th><th scope="col">Loyer</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.active?'current-rent':''}" ${r.active?'aria-current="true"':''}><th scope="row">${r.label}${r.active?' ●':''}</th><td>${money(r.cost)}</td><td>${money(r.rent)}</td></tr>`).join('')}</tbody></table><p>*Coût cumulé des constructions sur cette ville, hors achat du terrain. Chaque maison : <strong>${money(t.build)} DH</strong>. Revente à la banque : <strong>${money(t.build/2)} DH par maison</strong> (moitié prix). Après 4 maisons, l’hôtel coûte <strong>${money(t.build)} DH de plus</strong> et remplace les maisons.</p><p>Possédez toute la couleur et construisez de façon équilibrée. Les dépenses sur les autres villes du groupe ne sont pas incluses.</p><p class="rent-example">Avec <strong>3 maisons sur cette case</strong>, un adversaire paie <strong>${money(rent({...t,mortgaged:false,level:3},s))} DH</strong> au propriétaire.</p><p>● Niveau actuel · Tarifs classiques.</p></div>`;
 }
 function renderSelection(){
- $('#property-actions').replaceChildren();if(!state||state.auction||selected<0){$('#selected').textContent='Cliquez une ville pour voir son prix, son propriétaire et son loyer.';return}
+ $('#property-actions').replaceChildren();if(!state||state.auction||state.players.find(p=>p.id===state.me)?.autoPlay||selected<0){$('#selected').textContent='Cliquez une ville pour voir son prix, son propriétaire et son loyer.';return}
  const s=state,t=s.tiles[selected],owner=s.players.find(p=>p.id===t.owner),me=s.players.find(p=>p.id===s.me);$('#selected').innerHTML=`<div class="property-title"><span class="swatch" style="--group:${t.color||'#b5c4aa'}"></span>${esc(t.name)}</div>${t.price?`<div class="property-stats"><span>PRIX<strong>${t.price} DH</strong></span><span>LOYER<strong>${rent(t,s)}${t.kind==='utility'?'':' DH'}</strong></span></div><span>${owner?'Propriétaire : '+esc(owner.name):'Disponible à l’achat après y être arrivé.'}</span>`:`<p>${t.kind==='chance'||t.kind==='chest'?'Une carte est tirée quand un joueur arrive ici.':selected===0?'Recevez 200 DH en passant le départ.':selected===30?'Direction la prison, sans prime de départ.':selected===10?'Arrivée normale : simple visite, sans frais ni blocage. Seuls les joueurs envoyés en prison doivent suivre les règles de sortie.':t.kind==='tax'?'Payez '+(t.taxAmount??100)+' DH à la banque.':'Une pause gratuite.'}</p>`}`;
  $('#selected').insertAdjacentHTML('beforeend',propertySchedule(t,s));
  if(t.price)$('#selected').insertAdjacentHTML('beforeend',`<p class="mortgage-info">${t.mortgaged?'🔒 Hypothéqué : aucun loyer.':'Hypothèque possible : '+money(t.price/2)+' DH.'} Remboursement : ${money((t.price/2+Math.ceil(t.price/20)))} DH (intérêts inclus).</p>`);
@@ -152,9 +153,11 @@ function render(){
      statusText += ` · Déconnecté · robot dans ${formatTime(p.timeoutSeconds)}`;
    }
 
-   if (p.connectionStatus === 'replaced') statusText = 'Robot temporaire · retour possible';
-   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.timeoutSeconds && p.timeoutSeconds < 60 ? 'warning' : ''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span><small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
+   if (p.connectionStatus === 'replaced') statusText = p.autoPlay?'Mode auto':'Robot temporaire · retour possible';
+   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.connectionStatus==='disconnected'?'warning':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span>${p.id===s.me&&!p.out&&['opening','playing'].includes(s.phase)?`<label class="auto-toggle"><input type="checkbox" ${p.autoPlay?'checked':''} ${busy||animating?'disabled':''}> 🤖 Mode auto</label>`:''}<small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
  }).join('');
+ const autoToggle=$('#players .auto-toggle input');
+ if(autoToggle)autoToggle.onchange=()=>action('autoplay',null,{enabled:autoToggle.checked});
  makeBoard(s);updateTiles(s);updatePawns(s);if(!animating)showDice(s.dice);$('#turn').textContent=s.phase==='lobby'?'En attente des joueurs':s.phase==='finished'?'🏆 '+current.name:current.name+(current.id===s.me?' · à vous de jouer':current.bot?' · robot':' · à son tour');
  $('#log').innerHTML=s.log.slice().reverse().map(l=>'<p>'+esc(l)+'</p>').join('');renderActions();renderOffers();renderDebt();
  if(s.turnOrder)document.querySelectorAll('#players .player').forEach((el,i)=>{const rank=document.createElement('small');rank.className='turn-rank';rank.textContent='Ordre : '+(s.turnOrder.indexOf(i)+1)+(s.turnOrder.indexOf(i)===0?'er':'e');el.querySelector('.player-name').after(rank)});
@@ -200,7 +203,7 @@ function renderDebt(){
  const d=state.debts?.[0];if(!d)return;
  $('#actions').replaceChildren();$('#action-title').textContent='Dette à régler';const p=state.players.find(x=>x.id===d.player),creditor=state.players.find(x=>x.id===d.receiver);
  $('#status').textContent=p.name+' doit '+money(d.amount)+' DH à '+(creditor?.name||'la banque')+'. Disponible : '+money(p.money)+' DH. Le jeu est en pause.';
- if(d.player===state.me){
+ if(d.player===state.me&&!p.autoPlay){
   const help=document.createElement('p');help.textContent='Choisissez les biens à hypothéquer ou les maisons à revendre. Le paiement se fera dès que la somme sera réunie.';$('#actions').append(help);
   state.tiles.forEach((t,i)=>{if(t.owner!==state.me)return;const b=document.createElement('button');b.className='secondary';b.textContent=t.name+(t.level?' · vendre des bâtiments':t.mortgaged?' · déjà hypothéqué':' · hypothèque '+t.price/2+' DH');b.onclick=()=>{selected=i;renderSelection();$('#property-panel').scrollIntoView({block:'nearest'})};$('#actions').append(b)});
   const b=document.createElement('button');b.className='secondary';b.textContent='Déclarer faillite';b.disabled=busy||animating;b.onclick=()=>{if(confirm('Abandonner vos biens au créancier et quitter la partie ?'))action('bankrupt')};$('#actions').append(b);
