@@ -8,6 +8,10 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
 async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
 function resetView(){generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
+function formatTime(seconds){if(seconds>=60)return Math.floor(seconds/60)+'m '+seconds%60+'s';return seconds+'s'}
+function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
+async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
+function resetView(){generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 async function enter(create,mode){
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
@@ -116,7 +120,16 @@ function renderSelection(){
 }
 function render(){
  if(!state)return;const s=state,current=s.players[s.turn];$('#welcome').hidden=true;$('#game').hidden=false;$('#room-code').textContent=session.code;$('#player-count').textContent=s.players.length+' / 6';
- $('#players').innerHTML=s.players.map((p,i)=>`<div class="player ${i===s.turn?'active':''} ${p.out?'out':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span><small>${p.out?'Faillite':p.jail?'En prison':p.pos===10?'Simple visite':pawnNames[i]+(p.bot?' · robot':'')} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`).join('');
+ $('#players').innerHTML=s.players.map((p,i)=>{
+   let statusText = p.out ? 'Faillite' : p.jail ? 'En prison' : p.pos === 10 ? 'Simple visite' : pawnNames[i] + (p.bot ? ' · robot' : '');
+
+   // Add inactivity warning
+   if (!p.bot && !p.out && p.timeoutSeconds !== undefined && p.timeoutSeconds < 60) {
+     statusText += ` ⏱️ ${p.timeoutSeconds}s`;
+   }
+
+   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.timeoutSeconds && p.timeoutSeconds < 60 ? 'warning' : ''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span><small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
+ }).join('');
  makeBoard(s);updateTiles(s);updatePawns(s);if(!animating)showDice(s.dice);$('#turn').textContent=s.phase==='lobby'?'En attente des joueurs':s.phase==='finished'?'🏆 '+current.name:current.name+(current.id===s.me?' · à vous de jouer':current.bot?' · robot':' · à son tour');
  $('#log').innerHTML=s.log.slice().reverse().map(l=>'<p>'+esc(l)+'</p>').join('');renderActions();renderOffers();renderDebt();
  if(s.turnOrder)document.querySelectorAll('#players .player').forEach((el,i)=>{const rank=document.createElement('small');rank.className='turn-rank';rank.textContent='Ordre : '+(s.turnOrder.indexOf(i)+1)+(s.turnOrder.indexOf(i)===0?'er':'e');el.querySelector('.player-name').after(rank)});

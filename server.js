@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -10,8 +11,40 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Game state storage
-const rooms = new Map();
+// Game state storage with persistence
+const STORAGE_FILE = '/tmp/monopoly-rooms.json';
+let rooms = new Map();
+
+// Load rooms from storage on startup
+function loadRooms() {
+    try {
+        if (fs.existsSync(STORAGE_FILE)) {
+            const data = fs.readFileSync(STORAGE_FILE, 'utf8');
+            const parsed = JSON.parse(data);
+            rooms = new Map(Object.entries(parsed));
+            console.log(`Loaded ${rooms.size} rooms from storage`);
+        }
+    } catch (error) {
+        console.error('Error loading rooms:', error);
+        rooms = new Map();
+    }
+}
+
+// Save rooms to storage
+function saveRooms() {
+    try {
+        const obj = Object.fromEntries(rooms);
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify(obj), 'utf8');
+    } catch (error) {
+        console.error('Error saving rooms:', error);
+    }
+}
+
+// Auto-save every 5 seconds
+setInterval(saveRooms, 5000);
+
+// Load on startup
+loadRooms();
 
 // Utility functions
 function newTiles() {
@@ -1089,11 +1122,69 @@ app.get('/api/state', (req, res) => {
         const s = getRoom(req.query.code);
         const p = getPlayer(s, req.query.token);
         
+        // Mark player as active (last seen time)
+        if (!s.lastSeen) s.lastSeen = {};
+        s.lastSeen[p.id] = Date.now();
+
+        // Check for disconnected players (inactive for more than 2 minutes)
+        if (s.phase === 'playing' && !s.checkingDisconnect) {
+            s.checkingDisconnect = true;
+            const timeout = 120000; // 2 minutes
+
+            for (const player of s.players) {
+                if (!player.out && !player.bot && s.lastSeen[player.id]) {
+                    const inactive = Date.now() - s.lastSeen[player.id];
+
+                    if (inactive > timeout) {
+                        // Player disconnected - return properties to bank
+                        announce(s, player, player.name + ' a quitté la partie. Ses biens retournent à la banque.');
+
+                        for (const t of s.tiles) {
+                            if (t.owner === player.id) {
+                                t.owner = '';
+                                t.level = 0;
+                                t.mortgaged = false;
+                            }
+                        }
+
+                        player.out = true;
+                        player.money = 0;
+
+                        // Remove from debts
+                        if (s.debts) {
+                            s.debts = s.debts.filter(d => d.player !== player.id);
+                        }
+
+                        // Cancel offers involving this player
+                        if (s.offer && (s.offer.buyer === player.id || s.offer.seller === player.id)) {
+                            s.offer = null;
+                            addLog(s, 'Négociation annulée : un joueur a quitté.');
+                        }
+
+                        // Next turn if it was their turn
+                        if (s.players[s.turn].id === player.id) {
+                            nextTurn(s);
+                        }
+
+                        // Check if game is over
+                        const alive = s.players.filter(x => !x.out);
+                        if (alive.length === 1) {
+                            s.phase = 'finished';
+                            s.turn = s.players.indexOf(alive[0]);
+                            announce(s, alive[0], alive[0].name + ' gagne !', 'win');
+                        }
+                    }
+                }
+            }
+
+            s.checkingDisconnect = false;
+        }
+
         invokeBotStep(s);
         
         const publicState = {};
         for (const k in s) {
-            if (!['botNext', 'botPhase', 'decks'].includes(k)) {
+            if (!['botNext', 'botPhase', 'decks', 'lastSeen', 'checkingDisconnect'].includes(k)) {
                 publicState[k] = s[k];
             }
         }
@@ -1105,6 +1196,16 @@ app.get('/api/state', (req, res) => {
                     copy[k] = player[k];
                 }
             }
+
+            // Add inactivity timer for non-bot players
+            if (!player.bot && !player.out && s.lastSeen[player.id]) {
+                const inactive = Date.now() - s.lastSeen[player.id];
+                const timeout = 120000; // 2 minutes
+                const remaining = Math.max(0, timeout - inactive);
+                copy.inactiveSeconds = Math.floor(inactive / 1000);
+                copy.timeoutSeconds = Math.floor(remaining / 1000);
+            }
+
             return copy;
         });
         

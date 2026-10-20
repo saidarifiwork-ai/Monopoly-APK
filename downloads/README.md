@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.3
+# Quartiers Maroc pour Android — version 1.0.4
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.3.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.4.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -23,3 +23,7 @@ L’accueil est toujours présenté au lancement, y compris après la restaurati
 ## Serveur — version 1.0.3
 
 Le serveur par défaut devient Render. Les anciennes installations utilisant l’adresse Vercel par défaut sont redirigées vers Render, sans reprendre une session appartenant à Vercel. Les adresses personnalisées sont conservées. La disponibilité du serveur Render reste à vérifier : le proxy de cet environnement bloque l’accès à ce domaine (HTTP 403).
+
+## Dépôt commun — version 1.0.4
+
+Les changements du dépôt web `Demnatikhalid/monopoly` (commit `aa97d1fb23d516acdf67c8bb3d44c36162e952c4`) sont intégrés au serveur et au rendu embarqué. Le plateau reste celui du site ; les indicateurs de joueurs inactifs sont partagés. Les 14 tests passent, y compris contre le serveur Node.js commun local. Une partie solo a aussi été ouverte dans Chromium avec 40 cases. Ces vérifications ne constituent pas un essai sur téléphone physique. Le raccordement du service Render à ce dépôt reste à effectuer selon [le guide](../docs/DEPOT-COMMUN.md).

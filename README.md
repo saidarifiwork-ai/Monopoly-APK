@@ -1,5 +1,7 @@
 # Quartiers — jeu immobilier entre amis
 
+Le site et l’APK partagent désormais ce dépôt. Voir le [guide du dépôt commun et du raccordement Render](docs/DEPOT-COMMUN.md). Les demandes de changement concernent les deux versions par défaut ; les consignes sont dans `AGENTS.md`.
+
 ## Application Android Flutter
 
 L'application mobile se trouve dans [`mobile/`](mobile/README.md). Elle propose une interface tactile avec plateau zoomable et commandes en bas de l'écran. Le solo avec robot et les salons entre amis utilisent le serveur Node.js et nécessitent Internet. Consultez le guide mobile pour compiler et installer un APK de test, configurer le serveur et exécuter les tests.
