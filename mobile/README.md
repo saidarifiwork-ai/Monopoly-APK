@@ -23,7 +23,7 @@ Résultat : `mobile/build/app/outputs/flutter-apk/app-release.apk`, pour Android
 
 ## Serveur
 
-Le solo avec robot et les salons entre amis nécessitent Internet. Adresse initiale : `https://monopoly-mauve-tau.vercel.app`. Le bouton ⚙ de l’accueil permet de la changer après vérification avec `/api/health`. La valeur initiale peut aussi être définie avec `--dart-define=API_URL=https://votre-serveur.onrender.com`.
+Le solo avec robot et les salons entre amis nécessitent Internet. Adresse initiale : `https://monopoly-bw6e.onrender.com`. Le bouton ⚙ de l’accueil permet de la changer après vérification avec `/api/health`. La valeur initiale peut aussi être définie avec `--dart-define=API_URL=https://votre-serveur.onrender.com`.
 
 Le réseau passe par Dart, sans autoriser d’accès universel aux fichiers locaux dans Android WebView. Seules les routes santé, état et action du serveur configuré sont permises. Le vrai jeton de session est ajouté côté natif et n’est pas transmis au rendu du jeu.
 

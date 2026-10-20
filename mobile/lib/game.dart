@@ -208,12 +208,19 @@ class GameController extends ChangeNotifier {
   String get server => _api?.server.toString() ?? '';
   String get code => _session?['code'] as String? ?? '';
   Json get gameSession => Map<String, dynamic>.unmodifiable(_session ?? {});
-  String get savedServer =>
-      preferences.getString('server') ??
-      const String.fromEnvironment(
-        'API_URL',
-        defaultValue: 'https://monopoly-mauve-tau.vercel.app',
-      );
+  String get savedServer {
+    final saved = preferences.getString('server');
+    // Move the former default to Render; preserve custom server settings.
+    if (saved != null &&
+        saved.replaceFirst(RegExp(r'/+$'), '') !=
+            'https://monopoly-mauve-tau.vercel.app') {
+      return saved;
+    }
+    return const String.fromEnvironment(
+      'API_URL',
+      defaultValue: 'https://monopoly-bw6e.onrender.com',
+    );
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();

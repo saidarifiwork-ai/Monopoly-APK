@@ -81,6 +81,21 @@ Json fixture() => {
     };
 
 void main() {
+  test('Render is the default and replaces only the former default', () async {
+    for (final previous in [null, 'https://monopoly-mauve-tau.vercel.app/']) {
+      SharedPreferences.setMockInitialValues(
+          {if (previous != null) 'server': previous});
+      final controller = GameController(await SharedPreferences.getInstance());
+      expect(controller.savedServer, 'https://monopoly-bw6e.onrender.com');
+      controller.dispose();
+    }
+    SharedPreferences.setMockInitialValues(
+        {'server': 'https://custom.example'});
+    final controller = GameController(await SharedPreferences.getInstance());
+    expect(controller.savedServer, 'https://custom.example');
+    controller.dispose();
+  });
+
   test('the board uses the original web renderer byte for byte', () {
     for (final name in ['app.js', 'art.js', 'style.css']) {
       expect(File('assets/game/$name').readAsBytesSync(),
