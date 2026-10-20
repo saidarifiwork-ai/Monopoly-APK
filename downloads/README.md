@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.5
+# Quartiers Maroc pour Android — version 1.0.6
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.5.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.6.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -31,3 +31,7 @@ Les changements du dépôt web `Demnatikhalid/monopoly` (commit `aa97d1fb23d516a
 ## Déconnexions — version 1.0.5
 
 Après 30 secondes sans requête, le joueur apparaît déconnecté ; après 2 minutes, un robot temporaire prend le relais en conservant ses biens. Le retour avec sa session rend le contrôle au joueur. « Quitter la partie » permet le relais immédiat avec confirmation et conserve la possibilité de reprendre sur le même appareil. Voir [le fonctionnement détaillé](../docs/DECONNEXIONS.md). Les tests de présence, de l’API et du navigateur sont effectués localement ; la mise à jour sur téléphone physique reste à vérifier.
+
+## Enchères et délai — version 1.0.6
+
+Le robot prend le relais après 60 secondes d’absence (signalement après 30 secondes). Les terrains, gares et compagnies non achetés sont mis aux enchères : première offre dès 1 DH, réponse en 15 secondes, attribution au plus offrant. Le site propose un lien GitHub vers le dernier APK public. Neuf tests serveur et quinze tests Flutter/API passent ; une enchère à 1 DH est vérifiée dans Chromium. Aucun essai sur téléphone physique n’est revendiqué.

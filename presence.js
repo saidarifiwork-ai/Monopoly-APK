@@ -1,6 +1,6 @@
 // Presence belongs to authenticated sessions; an AI replacement keeps the same player.
 const DISCONNECTED_MS = 30_000;
-const TAKEOVER_MS = 120_000;
+const TAKEOVER_MS = 60_000;
 function touch(room, player, now = Date.now()) {
   room.lastSeen ??= {};
   room.lastSeen[player.id] = now;

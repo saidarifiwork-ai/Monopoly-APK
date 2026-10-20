@@ -107,3 +107,5 @@ body:has(#welcome:not([hidden])) footer{display:none}
 @media(max-width:550px){aside .property-panel{grid-column:1 / -1}.deed-table{font-size:12px}}
 
 .opening-results{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}.opening-results li{display:flex;justify-content:space-between;gap:10px;font-size:12px}.opening-results span{color:var(--red);text-align:right}.turn-rank{font-weight:700}
+
+.apk-download{color:var(--ink);font-size:12px;text-align:center;text-decoration:underline;padding:8px}

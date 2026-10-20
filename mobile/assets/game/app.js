@@ -71,7 +71,22 @@ function placePawn(p,s=state){const el=$('#pawn-'+p.id),tile=$('#tile-'+(positio
 function updatePawns(s){s.players.forEach((p,i)=>{let el=$('#pawn-'+p.id);if(!el){el=document.createElement('div');el.id='pawn-'+p.id;el.className='pawn';el.dataset.player=p.id;el.style.color=colors[i];el.innerHTML=art(pawnArts[i])+`<span class="pawn-label">${p.bot?'ROBOT':esc(p.name.slice(0,8))}</span>`;$('#token-layer').append(el)}el.classList.toggle('active',s.players[s.turn].id===p.id);placePawn(p,s)})}
 function addButton(container,label,type,index,secondary=false){const b=document.createElement('button');b.textContent=label;b.dataset.action=type;b.className=secondary?'secondary':'';b.disabled=busy||animating;b.onclick=()=>action(type,index);$(container).append(b)}
 function renderActions(){
- if(!state)return;const s=state,me=s.players.find(p=>p.id===s.me),current=s.players[s.turn];$('#actions').replaceChildren();
+ if(!state)return;const s=state,me=s.players.find(p=>p.id===s.me),current=s.players[s.turn];
+ const auctionKey=s.auction?[s.auction.index,s.auction.respondent,s.auction.amount,s.auction.deadline].join(':'):'';
+ const keepAuction=!!auctionKey&&$('#actions').dataset.auctionKey===auctionKey;
+ if(!keepAuction)$('#actions').replaceChildren();$('#actions').dataset.auctionKey=auctionKey;
+ if(s.auction){
+  const a=s.auction,t=s.tiles[a.index],respondent=s.players.find(p=>p.id===a.respondent),leader=s.players.find(p=>p.id===a.leader);
+  $('#action-title').textContent='Enchères · '+t.name;
+  $('#status').textContent=(leader?leader.name+' : '+a.amount+' DH':'Première offre dès 1 DH')+' · '+(respondent?.name||'')+' doit répondre · '+Math.max(0,Math.ceil((a.deadline-Date.now())/1000))+' s';
+  if(keepAuction){$('#actions').querySelectorAll('button').forEach(b=>b.disabled=busy||animating);return}
+  if(a.respondent===me.id&&!me.out){
+   const input=document.createElement('input');input.type='number';input.min=a.amount+1;input.max=me.money;input.step='1';input.value=a.amount+1;input.setAttribute('aria-label','Votre offre en dirhams');
+   const bid=document.createElement('button');bid.textContent='Proposer mon prix';bid.disabled=busy||animating;bid.onclick=()=>action('bid',null,{amount:Number(input.value)});
+   $('#actions').append(input,bid);addButton('#actions','Passer cette enchère','auctionpass',null,true);
+  }
+  $('#property-actions').replaceChildren();return;
+ }
  $('#action-title').textContent=s.phase==='lobby'?'Rassemblez vos amis.':s.phase==='finished'?'La victoire est à vous ?':current.bot?'Le robot joue.':current.id===s.me?'C’est votre tour !':current.name+' joue.';
  $('#status').textContent=s.phase==='lobby'?'Ajoutez un robot ou partagez le salon. Lancez quand tout le monde est prêt.':s.phase==='finished'?current.name+' remporte la partie. Revenez à l’accueil pour rejouer.':animating?'Suivez le lancer et le déplacement sur le plateau…':current.id===s.me?(s.rolled?'Achetez la ville si elle est libre, puis terminez votre tour.':'Lancez les dés : votre pion avancera case par case.'):current.bot?'Regardez ses dés, son pion et ses décisions. Il joue automatiquement.':'Vous pouvez examiner les villes pendant son tour.';
  if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6)addButton('#actions','Ajouter un robot 🤖','addbot',null,true);if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
@@ -90,7 +105,7 @@ function renderActions(){
   if((me.jailTurns||0)>=2)addButton('#actions','T3 : payer 50 DH et lancer les dés','payjail');
   else{addButton('#actions','Tenter un double · gratuit','roll');addButton('#actions','Payer 50 DH et lancer les dés','payjail',null,true)}
  }else addButton('#actions',me.jailDouble?'Sortie de prison : lancer pour avancer 🎲':'Lancer les dés 🎲','roll');
-}else{const t=s.tiles[me.pos];if(t.price&&!t.owner&&me.money>=t.price)addButton('#actions','Acheter '+t.name+' · '+t.price+' DH','buy');addButton('#actions',s.dice[0]===s.dice[1]&&!me.jail&&!me.jailDouble?'Rejouer mon double →':'Terminer mon tour →','end',null,true)}}
+}else{const t=s.tiles[me.pos];if(!s.auctioned&&t.price&&!t.owner&&me.money>=t.price)addButton('#actions','Acheter '+t.name+' · '+t.price+' DH','buy');if(!s.auctioned&&t.price&&!t.owner&&!me.jail)addButton('#actions','Mettre aux enchères','auction');addButton('#actions',s.dice[0]===s.dice[1]&&!me.jail&&!me.jailDouble?'Rejouer mon double →':'Terminer mon tour →','end',null,true)}}
  if(s.phase==='playing'&&(current.bot||animating)){$('#actions').insertAdjacentHTML('beforeend','<div class="thinking"><span></span><span></span><span></span> '+(animating?'Action en cours':'Le robot réfléchit')+'</div>')}
  if(s.phase==='playing'&&current.id===me.id&&!me.jail&&!s.debts?.length)$('#actions').insertAdjacentHTML('beforeend','<small class="keyboard-hint"><kbd>Espace</kbd> : '+(s.rolled?'terminer le tour':'lancer les dés')+'</small>');
  renderSelection();
@@ -103,7 +118,7 @@ function propertySchedule(t,s){
  return `<div class="deed-details"><table class="deed-table"><caption>Constructions et loyers · DH</caption><thead><tr><th scope="col">État</th><th scope="col">Coût total*</th><th scope="col">Loyer</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.active?'current-rent':''}" ${r.active?'aria-current="true"':''}><th scope="row">${r.label}${r.active?' ●':''}</th><td>${money(r.cost)}</td><td>${money(r.rent)}</td></tr>`).join('')}</tbody></table><p>*Coût cumulé des constructions sur cette ville, hors achat du terrain. Chaque maison : <strong>${money(t.build)} DH</strong>. Revente à la banque : <strong>${money(t.build/2)} DH par maison</strong> (moitié prix). Après 4 maisons, l’hôtel coûte <strong>${money(t.build)} DH de plus</strong> et remplace les maisons.</p><p>Possédez toute la couleur et construisez de façon équilibrée. Les dépenses sur les autres villes du groupe ne sont pas incluses.</p><p class="rent-example">Avec <strong>3 maisons sur cette case</strong>, un adversaire paie <strong>${money(rent({...t,mortgaged:false,level:3},s))} DH</strong> au propriétaire.</p><p>● Niveau actuel · Tarifs classiques.</p></div>`;
 }
 function renderSelection(){
- $('#property-actions').replaceChildren();if(!state||selected<0){$('#selected').textContent='Cliquez une ville pour voir son prix, son propriétaire et son loyer.';return}
+ $('#property-actions').replaceChildren();if(!state||state.auction||selected<0){$('#selected').textContent='Cliquez une ville pour voir son prix, son propriétaire et son loyer.';return}
  const s=state,t=s.tiles[selected],owner=s.players.find(p=>p.id===t.owner),me=s.players.find(p=>p.id===s.me);$('#selected').innerHTML=`<div class="property-title"><span class="swatch" style="--group:${t.color||'#b5c4aa'}"></span>${esc(t.name)}</div>${t.price?`<div class="property-stats"><span>PRIX<strong>${t.price} DH</strong></span><span>LOYER<strong>${rent(t,s)}${t.kind==='utility'?'':' DH'}</strong></span></div><span>${owner?'Propriétaire : '+esc(owner.name):'Disponible à l’achat après y être arrivé.'}</span>`:`<p>${t.kind==='chance'||t.kind==='chest'?'Une carte est tirée quand un joueur arrive ici.':selected===0?'Recevez 200 DH en passant le départ.':selected===30?'Direction la prison, sans prime de départ.':selected===10?'Arrivée normale : simple visite, sans frais ni blocage. Seuls les joueurs envoyés en prison doivent suivre les règles de sortie.':t.kind==='tax'?'Payez '+(t.taxAmount??100)+' DH à la banque.':'Une pause gratuite.'}</p>`}`;
  $('#selected').insertAdjacentHTML('beforeend',propertySchedule(t,s));
  if(t.price)$('#selected').insertAdjacentHTML('beforeend',`<p class="mortgage-info">${t.mortgaged?'🔒 Hypothéqué : aucun loyer.':'Hypothèque possible : '+money(t.price/2)+' DH.'} Remboursement : ${money((t.price/2+Math.ceil(t.price/20)))} DH (intérêts inclus).</p>`);

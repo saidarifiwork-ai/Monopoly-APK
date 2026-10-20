@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const presence = require('./presence');
+const auction = require('./auction');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -426,6 +427,7 @@ function nextTurn(s) {
     } while (s.players[s.turn].out);
     
     s.rolled = false;
+    s.auctioned = false;
     s.botPhase = 'buy';
     s.botNext = Date.now() + 1800;
 }
@@ -734,6 +736,13 @@ function invokeFinanceAction(s, p, data) {
 }
 
 function invokeGameAction(s, p, data) {
+    if (s.auction) {
+        if (!['bid', 'auctionpass'].includes(data.type)) throw new Error('Terminez les enchères avant de continuer.');
+        const message = auction.respond(s, p, data.type, data.amount);
+        if (message) addLog(s, message);
+        return;
+    }
+    if (['bid', 'auctionpass'].includes(data.type)) throw new Error('Aucune enchère en cours.');
     if (['mortgage', 'unmortgage', 'bankrupt'].includes(data.type)) {
         invokeFinanceAction(s, p, data);
         return;
@@ -793,6 +802,7 @@ function invokeGameAction(s, p, data) {
             }
             
             s.rolled = true;
+            s.auctioned = false;
             s.botPhase = 'buy';
             p.jailDouble = false;
             let tryDouble = false;
@@ -875,12 +885,24 @@ function invokeGameAction(s, p, data) {
             }
             
             if (p.out) nextTurn(s);
+            else {
+                const landed = s.tiles[p.pos];
+                if (s.phase === 'playing' && !p.jail && s.rolled && !s.debts.length && landed.price > 0 && !landed.owner && p.money < landed.price) {
+                    const message = auction.start(s, p);
+                    addLog(s, message || 'Enchères pour ' + landed.name + ' : première offre dès 1 DH.');
+                }
+            }
             break;
             
+        case 'auction': {
+            const message = auction.start(s, p);
+            addLog(s, message || 'Enchères pour ' + s.tiles[p.pos].name + ' : première offre dès 1 DH.');
+            break;
+        }
         case 'buy':
             if (!s.rolled) throw new Error('Lancez les dés avant d\'acheter.');
             const tile = s.tiles[p.pos];
-            if (tile.price <= 0 || tile.owner || p.money < tile.price) {
+            if (s.auctioned || tile.price <= 0 || tile.owner || p.money < tile.price) {
                 throw new Error('Achat impossible.');
             }
             p.money -= tile.price;
@@ -890,6 +912,11 @@ function invokeGameAction(s, p, data) {
             
         case 'end':
             if (!s.rolled) throw new Error('Lancez les dés avant de terminer.');
+            if (!s.auctioned && !p.jail && s.tiles[p.pos].price > 0 && !s.tiles[p.pos].owner) {
+                const message = auction.start(s, p);
+                addLog(s, message || 'Enchères pour ' + s.tiles[p.pos].name + '.');
+                break;
+            }
             if (s.dice[0] === s.dice[1] && !p.jail && !p.jailDouble) {
                 s.rolled = false;
                 s.botNext = Date.now() + 2000;
@@ -962,6 +989,11 @@ function invokeDebtBot(s) {
 }
 
 function invokeBotStep(s) {
+    if (s.auction) {
+        const message = auction.tick(s);
+        if (message) addLog(s, message);
+        return;
+    }
     if (s.phase === 'opening') {
         const p = s.players[s.turn];
         if (p.bot && Date.now() >= s.botNext) {
@@ -1025,7 +1057,7 @@ function invokeBotStep(s) {
     if (s.botPhase === 'buy') {
         s.botPhase = 'build';
         const t = s.tiles[p.pos];
-        if (t.price > 0 && !t.owner && p.money >= t.price + 150) {
+        if (!s.auctioned && t.price > 0 && !t.owner && p.money >= t.price + 150) {
             invokeGameAction(s, p, {type: 'buy'});
             return;
         }
@@ -1062,6 +1094,11 @@ setInterval(() => {
     for (const s of rooms.values()) {
         try {
             updatePresence(s);
+            if (s.auction) {
+                const message = auction.tick(s);
+                if (message) addLog(s, message);
+                continue;
+            }
             if (s.players.some(p => presence.status(s, p) === 'online')) invokeBotStep(s);
         } catch (error) {
             console.error('Presence update:', error.message);

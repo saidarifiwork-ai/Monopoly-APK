@@ -28,3 +28,5 @@ html.quartiers-mobile #connection { display: block; padding: 2px 12px 6px; }
 @media (orientation: landscape) {
   html.quartiers-mobile main { max-width: 760px; }
 }
+
+.quartiers-mobile .apk-download{display:none}

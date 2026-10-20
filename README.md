@@ -53,8 +53,8 @@ Cette version est prévue pour des amis de confiance sur un réseau privé. Ne p
 - Une dette bloque les lancers et fins de tour. Le joueur choisit les maisons à vendre et les propriétés à hypothéquer. Dès que les liquidités suffisent, la dette est réglée. Aucune vente automatique des terrains. Le robot gère uniquement ses propres biens.
 - Offres : argent + plusieurs terrains, gares ou compagnies contre une propriété. Acceptation, refus et contre-offre. Il faut lever les hypothèques et vendre les bâtiments du groupe avant un échange. Les transferts sont vérifiés et appliqués ensemble.
 - Carte de prison : choix explicite entre l’utiliser, tenter un double ou payer. La règle personnalisée T3 reste le paiement obligatoire avant le lancer, sauf utilisation d’une carte.
-- 16 cartes Chance et 16 Caisse commune, paquets séparés. Impôts simplifiés à 100 DH, parc gratuit sans cagnotte. Pas d’enchères.
-- Faillite volontaire pendant une dette : actifs remis au créancier, ou rendus disponibles si la dette est envers la banque. La remise en vente sans enchères reste une simplification.
+- 16 cartes Chance et 16 Caisse commune, paquets séparés. Impôts simplifiés à 100 DH, parc gratuit sans cagnotte. Enchères à partir de 1 DH si le bien n’est pas acheté.
+- Faillite volontaire pendant une dette : actifs remis au créancier, ou rendus disponibles si la dette est envers la banque. Les biens rendus à la banque sont à nouveau disponibles lors d’une prochaine arrivée.
 - Espace lance les dés avant le déplacement, puis termine le tour (ou prépare la relance d’un double). Le raccourci reste inactif pendant une saisie, une fenêtre, une animation, une négociation, une dette ou le tour adverse. En prison, choisissez un bouton.
 - Dés et pions agrandis de 5 %, déplacement interpolé case par case avec repérage de la case traversée.
 

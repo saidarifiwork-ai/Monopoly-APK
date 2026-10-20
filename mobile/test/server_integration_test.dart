@@ -45,9 +45,15 @@ void main() {
     if (tile['price'] > 0 &&
         tile['owner'] == '' &&
         s.player['money'] >= tile['price']) {
-      await action(current, 'buy');
+      await action(current, 'auction');
+      await expectLater(action(current, 'end'), throwsA(isA<ApiException>()));
+      await api.request('/api/action',
+          data: {...current, 'type': 'bid', 'amount': 1});
+      await action(other, 'auctionpass');
       final next = await state(current);
+      expect(next.json['auction'], isNull);
       expect(next.tiles[s.player['pos'] as int]['owner'], next.me);
+      expect(next.player['money'], s.player['money'] - 1);
     }
     await action(current, 'end');
     final solo = await api
@@ -62,7 +68,10 @@ void main() {
       if (s.events.any((e) => e['type'] == 'move' && e['playerId'] == bot)) {
         break;
       }
-      if (s.myTurn) {
+      final auction = s.json['auction'];
+      if (auction != null) {
+        if (auction['respondent'] == s.me) await action(solo, 'auctionpass');
+      } else if (s.myTurn) {
         if (s.phase == 'opening') {
           await action(solo, 'orderroll');
         } else if (s.phase == 'playing') {
