@@ -601,7 +601,7 @@ function invokeTradeAction(s, p, data) {
     
     if (data.type === 'rejectoffer') {
         s.offer = null;
-        addLog(s, p.name + ' refuse l\'offre.');
+        announce(s, p, p.name + ' refuse l\'offre.', 'offer-rejected');
         return;
     }
     

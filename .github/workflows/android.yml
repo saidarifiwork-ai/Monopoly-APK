@@ -6,6 +6,7 @@ on:
     branches: [main, flutter-android-download]
     paths:
       - 'app.js'
+      - 'offer-refused.mp3'
       - 'art.js'
       - 'style.css'
       - 'index.html'
@@ -19,6 +20,7 @@ on:
   pull_request:
     paths:
       - 'app.js'
+      - 'offer-refused.mp3'
       - 'art.js'
       - 'style.css'
       - 'index.html'

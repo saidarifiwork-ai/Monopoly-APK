@@ -68,3 +68,5 @@ L’accueil est toujours présenté au lancement, y compris après la restaurati
 Le [relais par robot temporaire](../docs/DECONNEXIONS.md) est commun au site et à l’application. Le bouton Quitter demande confirmation et conserve la session pour reprendre sa place.
 
 La version 1.0.7 permet d’hypothéquer avant l’achat ou les enchères. Une célébration « Champion du Maroc » accompagne la victoire, avec le son selon les réglages du joueur.
+
+Le refus d’une offre diffuse `offer-refused.mp3`, embarqué localement et soumis aux réglages de son. Android autorise la lecture des événements sonores sans exiger un nouveau geste sur chaque refus ; le démarrage du média reste déclenché uniquement par le jeu.

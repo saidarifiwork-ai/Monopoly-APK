@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'game.dart';
 
@@ -50,6 +51,10 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
     });
     try {
       final controller = WebViewController();
+      if (controller.platform is AndroidWebViewController) {
+        await (controller.platform as AndroidWebViewController)
+            .setMediaPlaybackRequiresUserGesture(false);
+      }
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setBackgroundColor(const Color(0xFFEEE9DD));
       await controller.enableZoom(true);

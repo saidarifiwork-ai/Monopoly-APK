@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.8
+# Quartiers Maroc pour Android — version 1.0.9
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.8.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.9.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -43,3 +43,7 @@ Une arrivée sans argent suffisant ne lance plus automatiquement les enchères :
 ## Mode auto — version 1.0.8
 
 Une case « 🤖 Mode auto » apparaît près du nom du joueur connecté pendant le tirage de l’ordre et la partie. Cochée : le robot contrôle cette place. Décochée : le même joueur reprend le contrôle. Les actualisations et reconnexions ne désactivent pas ce choix. Le contrôle concerne uniquement la session authentifiée ; les biens restent ceux du joueur. Quatorze tests serveur et quinze tests Flutter/API passent ; le contrôle de la case est vérifié dans Chromium à une taille de téléphone. Aucun essai sur téléphone physique n’est revendiqué.
+
+## Audio de refus — version 1.0.9
+
+Le fichier audio fourni par l’utilisateur est joué à la réception d’un événement de refus d’offre, pour chaque client connecté au salon. Les annulations et passages aux enchères ne déclenchent pas ce son. Le volume, le mode muet et la mise en arrière-plan restent respectés. Le MP3 original est embarqué sans conversion dans le web et l’APK. Quinze tests serveur et quinze tests Flutter/API passent ; la lecture réelle du média et le mode muet sont vérifiés dans Chromium. L’essai sur téléphone physique reste à effectuer.

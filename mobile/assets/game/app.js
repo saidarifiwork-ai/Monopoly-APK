@@ -8,11 +8,11 @@ const money=n=>Number(n).toLocaleString('fr-FR');
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : (window.API_URL || '');
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
 async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
-function resetView(){document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
+function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 function formatTime(seconds){if(seconds>=60)return Math.floor(seconds/60)+'m '+seconds%60+'s';return seconds+'s'}
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
 async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
-function resetView(){document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
+function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 async function enter(create,mode){
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
@@ -49,7 +49,7 @@ async function playEvent(e,next,ticket){
  }else if(e.type==='card'){gameSound.play('card');
   announce(name+' tire une carte '+(e.deck==='chest'?'Caisse commune':'Chance')+'.',e.playerId);await showCard(e,name,p?.bot);
  }else{
-  gameSound.play(e.type==='win'?'win':e.type==='build'?'build':e.type==='purchase'?'money':/va en prison/.test(e.text||'')?'jail':/DH/.test(e.text||'')?'money':'');announce(e.text||'',e.playerId);if(e.type==='purchase'||e.type==='build')updateTiles(next);await sleep(reduced?100:1200);
+  gameSound.play(e.type==='offer-rejected'?'offer-rejected':e.type==='win'?'win':e.type==='build'?'build':e.type==='purchase'?'money':/va en prison/.test(e.text||'')?'jail':/DH/.test(e.text||'')?'money':'');announce(e.text||'',e.playerId);if(e.type==='purchase'||e.type==='build')updateTiles(next);await sleep(reduced?100:1200);
  }
 }
 function showDice(values){const faces={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};$('#dice').innerHTML=values.map(n=>`<div class="die" aria-label="${n}">${Array.from({length:9},(_,i)=>`<span class="pip ${faces[n].includes(i)?'on':''}"></span>`).join('')}</div>`).join('');$('#dice').setAttribute('aria-label','Dés : '+values.join(' et '))}
@@ -211,14 +211,23 @@ function renderDebt(){
 }
 // All effects are synthesized locally. One context and master volume per tab.
 const gameSound={
- ctx:null,master:null,muted:false,volume:.35,lastStep:0,
+ ctx:null,master:null,muted:false,volume:.35,lastStep:0,refusal:new Audio('offer-refused.mp3'),
  async unlock(){
   try{
    if(!this.ctx){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;this.ctx=new Audio();this.master=this.ctx.createGain();this.master.connect(this.ctx.destination);this.sync()}
    if(this.ctx.state==='suspended')await this.ctx.resume();
   }catch{/* Audio must never interrupt gameplay. */}
  },
- sync(){if(this.master)this.master.gain.setValueAtTime(this.muted||document.hidden?0:this.volume,this.ctx.currentTime)},
+ sync(){
+  if(this.master)this.master.gain.setValueAtTime(this.muted||document.hidden?0:this.volume,this.ctx.currentTime);
+  this.refusal.volume=this.volume;this.refusal.muted=this.muted||document.hidden;
+  if(document.hidden)this.refusal.pause();
+ },
+ playRefusal(){
+  if(this.muted||!this.volume||document.hidden)return;
+  this.refusal.volume=this.volume;this.refusal.muted=false;this.refusal.currentTime=0;
+  this.refusal.play().catch(()=>{});
+ },
  tone(freq,delay,duration,type='sine',level=.16,end=freq){
   const c=this.ctx,o=c.createOscillator(),g=c.createGain(),at=c.currentTime+delay;
   o.type=type;o.frequency.setValueAtTime(freq,at);o.frequency.exponentialRampToValueAtTime(Math.max(20,end),at+duration);
@@ -236,6 +245,7 @@ const gameSound={
   }
  },
  play(kind){
+  if(kind==='offer-rejected'){this.playRefusal();return}
   if(!kind||this.muted||!this.volume||document.hidden||this.ctx?.state!=='running')return;
   try{
    const t=(...args)=>this.tone(...args);

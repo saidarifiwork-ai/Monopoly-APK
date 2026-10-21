@@ -136,6 +136,7 @@ window.startQuartiers = async function (configuration) {
     window.quartiersMobilePause = () => {
       clearInterval(pollTimer);
       gameSound.ctx?.suspend();
+      gameSound.refusal.pause();
     };
     window.quartiersMobileResume = () => {
       clearInterval(pollTimer);

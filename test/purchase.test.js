@@ -36,3 +36,14 @@ test('manual auto persists through heartbeats, runs real bot actions, and reject
  e.invokeGameAction(s,p,{type:'autoplay',enabled:false});assert.equal(p.bot,false);assert.equal(p.autoPlay,undefined);
  e.invokeGameAction(s,p,{type:'mortgage',index:5});assert.equal(p.money,101);
 });
+
+test('refusing an offer broadcasts one sound event; cancel and invalid repeat do not',()=>{
+ const e=engine(),{p,s}=fixture(e),other=s.players[1];
+ s.offer={buyer:other.id,seller:p.id,respondent:p.id,index:5};
+ e.invokeGameAction(s,p,{type:'rejectoffer'});
+ assert.equal(s.offer,null);assert.equal(s.events.length,1);
+ assert.equal(s.events[0].type,'offer-rejected');assert.equal(s.events[0].playerId,p.id);
+ assert.throws(()=>e.invokeGameAction(s,p,{type:'rejectoffer'}));assert.equal(s.events.length,1);
+ s.offer={buyer:other.id,seller:p.id,respondent:p.id,index:5};
+ e.invokeGameAction(s,other,{type:'canceloffer'});assert.equal(s.events.length,1);
+});
