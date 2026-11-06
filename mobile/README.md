@@ -70,3 +70,5 @@ Le [relais par robot temporaire](../docs/DECONNEXIONS.md) est commun au site et 
 La version 1.0.7 permet d’hypothéquer avant l’achat ou les enchères. Une célébration « Champion du Maroc » accompagne la victoire, avec le son selon les réglages du joueur.
 
 Le refus d’une offre diffuse `offer-refused.mp3`, embarqué localement et soumis aux réglages de son. Android autorise la lecture des événements sonores sans exiger un nouveau geste sur chaque refus ; le démarrage du média reste déclenché uniquement par le jeu.
+
+Après une victoire, l’hôte peut choisir « Rejouer » afin de retrouver les mêmes joueurs dans le salon et lancer une nouvelle partie.

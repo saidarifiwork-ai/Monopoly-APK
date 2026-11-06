@@ -737,7 +737,22 @@ function invokeFinanceAction(s, p, data) {
     settleDebts(s);
 }
 
+function restartGame(s, p) {
+    if (s.phase !== 'finished' || p.id !== s.host) throw new Error('Seul l’hôte peut relancer une partie terminée.');
+    const code=s.code, host=s.host, lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1;
+    const players=s.players.map(player => {
+        const {id, token, name, bot, temporaryBot, autoPlay} = player;
+        return {...newPlayer(name), id, token, bot: !!bot,
+            ...(temporaryBot ? {temporaryBot: true} : {}), ...(autoPlay ? {autoPlay: true} : {})};
+    });
+    for (const key of Object.keys(s)) delete s[key];
+    Object.assign(s, {code, host, players, lastSeen, gameRound, eventSeq,
+        tiles:newTiles(), turn:0, phase:'lobby', rolled:false, dice:[5,3],
+        log:[p.name+' relance une partie.'], events:[], botPhase:'buy', botNext:0, debts:[], offer:null});
+}
+
 function invokeGameAction(s, p, data) {
+    if (data.type === 'rematch') { restartGame(s, p); return; }
     if (data.type === 'autoplay') {
         if (presence.setAuto(s, p, data.enabled)) addLog(s, p.name + (data.enabled ? ' active le mode auto.' : ' reprend le contrôle.'));
         return;

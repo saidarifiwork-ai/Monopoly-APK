@@ -28,6 +28,9 @@ function poll(force=false){
   const next=await api('/api/state?code='+activeSession.code+'&token='+activeSession.token);if(ticket!==generation)return;
   $('#connection').textContent='● Connecté · salon privé';
   if(!state){state=next;lastEvent=next.eventSeq||0;next.players.forEach(p=>positions.set(p.id,p.pos));render();return}
+  if((next.gameRound||0)!==(state.gameRound||0)){
+   document.querySelector('#victory-dialog')?.close();closeCard();selected=-1;positions.clear();$('#token-layer').replaceChildren();document.querySelectorAll('.payment-popup').forEach(el=>el.remove());lastEvent=next.eventSeq||0;
+  }
   const events=(next.events||[]).filter(e=>e.id>lastEvent);
   if(events.length){animating=true;document.body.classList.add('animating');$('#activity').classList.add('busy');renderActions();
    for(const event of events){if(ticket!==generation)return;await playEvent(event,next,ticket);lastEvent=event.id}
@@ -84,7 +87,7 @@ function renderActions(){
  const auctionKey=s.auction?[s.auction.index,s.auction.respondent,s.auction.amount,s.auction.deadline].join(':'):'';
  const keepAuction=!!auctionKey&&$('#actions').dataset.auctionKey===auctionKey;
  if(!keepAuction)$('#actions').replaceChildren();$('#actions').dataset.auctionKey=auctionKey;
- if(me.autoPlay){$('#actions').replaceChildren();$('#actions').dataset.auctionKey='';$('#action-title').textContent='🤖 Mode auto';$('#status').textContent='Le robot joue pour vous. Décochez Mode auto pour reprendre.';$('#property-actions').replaceChildren();return}
+ if(me.autoPlay&&s.phase!=='finished'){$('#actions').replaceChildren();$('#actions').dataset.auctionKey='';$('#action-title').textContent='🤖 Mode auto';$('#status').textContent='Le robot joue pour vous. Décochez Mode auto pour reprendre.';$('#property-actions').replaceChildren();return}
  if(s.auction){
   const a=s.auction,t=s.tiles[a.index],respondent=s.players.find(p=>p.id===a.respondent),leader=s.players.find(p=>p.id===a.leader);
   $('#action-title').textContent='Enchères · '+t.name;
@@ -98,7 +101,8 @@ function renderActions(){
   $('#property-actions').replaceChildren();return;
  }
  $('#action-title').textContent=s.phase==='lobby'?'Rassemblez vos amis.':s.phase==='finished'?'La victoire est à vous ?':current.bot?'Le robot joue.':current.id===s.me?'C’est votre tour !':current.name+' joue.';
- $('#status').textContent=s.phase==='lobby'?'Ajoutez un robot ou partagez le salon. Lancez quand tout le monde est prêt.':s.phase==='finished'?current.name+' remporte la partie. Revenez à l’accueil pour rejouer.':animating?'Suivez le lancer et le déplacement sur le plateau…':current.id===s.me?(s.rolled?'Achetez la ville si elle est libre, puis terminez votre tour.':'Lancez les dés : votre pion avancera case par case.'):current.bot?'Regardez ses dés, son pion et ses décisions. Il joue automatiquement.':'Vous pouvez examiner les villes pendant son tour.';
+ $('#status').textContent=s.phase==='lobby'?'Ajoutez un robot ou partagez le salon. Lancez quand tout le monde est prêt.':s.phase==='finished'?current.name+' remporte la partie. '+(me.id===s.host?'Relancez une partie avec les mêmes joueurs.':'L’hôte peut relancer une partie.'):animating?'Suivez le lancer et le déplacement sur le plateau…':current.id===s.me?(s.rolled?'Achetez la ville si elle est libre, puis terminez votre tour.':'Lancez les dés : votre pion avancera case par case.'):current.bot?'Regardez ses dés, son pion et ses décisions. Il joue automatiquement.':'Vous pouvez examiner les villes pendant son tour.';
+ if(s.phase==='finished'&&me.id===s.host)addButton('#actions','🔄 Rejouer','rematch');
  if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6)addButton('#actions','Ajouter un robot 🤖','addbot',null,true);if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
  if(s.phase==='opening'){
   $('#action-title').textContent='Qui commence ?';
@@ -290,8 +294,8 @@ document.addEventListener('keydown',e=>{
 // One celebration per finished room; polling must never replay it.
 const celebratedRooms=new Set();
 function showVictory(s){
- if(s.phase!=='finished')return;
- const winner=s.players[s.turn],key=(session?.code||s.code)+':'+winner.id;
+ if(s.phase!=='finished'){document.querySelector('#victory-dialog')?.close();return;}
+ const winner=s.players[s.turn],key=(session?.code||s.code)+':'+(s.gameRound||0)+':'+winner.id;
  if(celebratedRooms.has(key))return;
  celebratedRooms.add(key);
  let alreadySeen=false;try{alreadySeen=sessionStorage.getItem('quartiers-win:'+key)==='yes';sessionStorage.setItem('quartiers-win:'+key,'yes')}catch{}
@@ -300,6 +304,8 @@ function showVictory(s){
  if(!dialog){dialog=document.createElement('dialog');dialog.id='victory-dialog';dialog.className='victory-dialog';dialog.setAttribute('aria-labelledby','victory-title');
  dialog.innerHTML='<div class="victory-confetti" aria-hidden="true"></div><div class="victory-cup" aria-hidden="true">🏆</div><p class="eyebrow">CHAMPION DU MAROC</p><div class="victory-pawn" aria-hidden="true"></div><h2 id="victory-title"></h2><p>Une belle victoire. Bravo au champion !</p><button type="button">Voir le plateau</button>';
  dialog.querySelector('button').onclick=()=>dialog.close();document.body.append(dialog)}
+ let rematch=dialog.querySelector('.rematch-button');if(!rematch){rematch=document.createElement('button');rematch.type='button';rematch.className='rematch-button';rematch.textContent='🔄 Rejouer';dialog.querySelector('button').before(rematch)}
+ rematch.hidden=s.me!==s.host;rematch.disabled=busy||animating;rematch.onclick=()=>action('rematch');
  dialog.querySelector('h2').textContent=winner.name+' remporte la partie !';
  let summary=dialog.querySelector('.victory-summary');if(!summary){summary=document.createElement('div');summary.className='victory-summary';dialog.querySelector('button').before(summary)}
  const title=document.createElement('h3');title.textContent='Classement final';summary.replaceChildren(title);
