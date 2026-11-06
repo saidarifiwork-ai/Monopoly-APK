@@ -32,13 +32,14 @@ function poll(force=false){
   if(events.length){animating=true;document.body.classList.add('animating');$('#activity').classList.add('busy');renderActions();
    for(const event of events){if(ticket!==generation)return;await playEvent(event,next,ticket);lastEvent=event.id}
   }
-  if(ticket!==generation)return;if(next.phase==='playing'&&next.players[next.turn].id===next.me&&(state.players[state.turn].id!==next.me||!state.rolled&&state.phase==='lobby'))gameSound.play('turn');state=next;state.players.forEach(p=>positions.set(p.id,p.pos));animating=false;document.body.classList.remove('animating');$('#activity').classList.remove('busy');render();
+  if(ticket!==generation)return;if(['opening','playing'].includes(next.phase)&&next.players[next.turn].id===next.me&&!next.players[next.turn].bot&&(state.phase!==next.phase||state.players[state.turn].id!==next.me))(gameSound.play('turn'),toast('🎲 À toi de jouer !'));state=next;state.players.forEach(p=>positions.set(p.id,p.pos));animating=false;document.body.classList.remove('animating');$('#activity').classList.remove('busy');render();
  }catch(e){if(ticket!==generation)return;$('#connection').textContent='● Connexion interrompue';animating=false;document.body.classList.remove('animating');if(e.message==='Salon introuvable'||e.message==='Session invalide.'){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false;toast('Le plateau a été mis à jour. Créez une nouvelle partie.')}else{toast('Connexion au serveur interrompue. Vérifiez Lancer.cmd.')}}})().finally(()=>{pollPromise=null});return pollPromise;
 }
 function announce(text,playerId){$('#activity-text').textContent=text;if(playerId){document.querySelectorAll('.player').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId));document.querySelectorAll('.pawn').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId))}}
 async function playEvent(e,next,ticket){
  const p=next.players.find(p=>p.id===e.playerId),name=p?.name||'';
- if(e.type==='dice'){gameSound.play('dice');
+ if(e.type==='payment'){showPayment(e);await sleep(reduced?100:1200);
+ }else if(e.type==='dice'){gameSound.play('dice');
   announce((p?.bot?'🤖 ':'')+name+' lance les dés…',e.playerId);$('#turn').textContent=name+' lance les dés';$('#dice').classList.add('rolling');
   for(let i=0;i<(reduced?1:9);i++){showDice([1+Math.floor(Math.random()*6),1+Math.floor(Math.random()*6)]);await sleep(reduced?30:90)}
   showDice(e.dice);$('#dice').classList.remove('rolling');announce(name+' obtient '+e.dice[0]+' + '+e.dice[1]+' = '+(e.dice[0]+e.dice[1])+'.',e.playerId);await sleep(reduced?60:450);
@@ -51,6 +52,14 @@ async function playEvent(e,next,ticket){
  }else{
   gameSound.play(e.type==='offer-rejected'?'offer-rejected':e.type==='win'?'win':e.type==='build'?'build':e.type==='purchase'?'money':/va en prison/.test(e.text||'')?'jail':/DH/.test(e.text||'')?'money':'');announce(e.text||'',e.playerId);if(e.type==='purchase'||e.type==='build')updateTiles(next);await sleep(reduced?100:1200);
  }
+}
+function showPayment(event){
+ const tile=document.querySelector('#tile-'+event.tileIndex),board=$('#board');if(!tile||!board||!(event.amount>0))return;
+ const cell=tile.getBoundingClientRect(),area=board.getBoundingClientRect();
+ const amount=document.createElement('span');amount.className='payment-popup';amount.textContent='−'+money(event.amount)+' DH';
+ amount.style.fontSize=Math.min(38,Math.max(13,13+Math.log10(Math.max(1,event.amount))*8))+'px';
+ amount.style.left=((cell.left+cell.width/2-area.left)/area.width*100)+'%';amount.style.top=((cell.top+cell.height/2-area.top)/area.height*100)+'%';
+ board.append(amount);setTimeout(()=>amount.remove(),2000);
 }
 function showDice(values){const faces={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};$('#dice').innerHTML=values.map(n=>`<div class="die" aria-label="${n}">${Array.from({length:9},(_,i)=>`<span class="pip ${faces[n].includes(i)?'on':''}"></span>`).join('')}</div>`).join('');$('#dice').setAttribute('aria-label','Dés : '+values.join(' et '))}
 function closeCard(){if(cardResolve){cardResolve();cardResolve=null}$('#card-overlay').hidden=true;document.querySelectorAll('.deck').forEach(n=>n.classList.remove('drawing'))}
@@ -292,6 +301,9 @@ function showVictory(s){
  dialog.innerHTML='<div class="victory-confetti" aria-hidden="true"></div><div class="victory-cup" aria-hidden="true">🏆</div><p class="eyebrow">CHAMPION DU MAROC</p><div class="victory-pawn" aria-hidden="true"></div><h2 id="victory-title"></h2><p>Une belle victoire. Bravo au champion !</p><button type="button">Voir le plateau</button>';
  dialog.querySelector('button').onclick=()=>dialog.close();document.body.append(dialog)}
  dialog.querySelector('h2').textContent=winner.name+' remporte la partie !';
+ let summary=dialog.querySelector('.victory-summary');if(!summary){summary=document.createElement('div');summary.className='victory-summary';dialog.querySelector('button').before(summary)}
+ const title=document.createElement('h3');title.textContent='Classement final';summary.replaceChildren(title);
+ for(const player of [...s.players].sort((a,b)=>a.id===winner.id?-1:b.id===winner.id?1:b.money-a.money)){const row=document.createElement('p');const owned=s.tiles.filter(t=>t.owner===player.id);row.textContent=player.name+' · '+money(player.money)+' DH · '+owned.length+' bien'+(owned.length===1?'':'s')+(owned.length?' : '+owned.map(t=>t.name).join(', '):'');summary.append(row)}
  const pawn=dialog.querySelector('.victory-pawn'),index=s.players.indexOf(winner);pawn.innerHTML=art(pawnArts[index]);pawn.style.color=colors[index];
  const confetti=dialog.querySelector('.victory-confetti');confetti.replaceChildren();
  if(!reduced)for(let i=0;i<48;i++){const bit=document.createElement('span');bit.style.setProperty('--x',(i*37%100)+'%');bit.style.setProperty('--delay',(i%12)*.1+'s');bit.style.setProperty('--rotation',(i*57)+'deg');bit.style.background=i%2?'#087f49':'#d63c39';confetti.append(bit)}

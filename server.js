@@ -227,7 +227,7 @@ function pay(s, p, amount, receiver) {
     if (!s.debts) s.debts = [];
     
     const receiverId = receiver ? receiver.id : '';
-    s.debts.push({player: p.id, receiver: receiverId, amount: Math.floor(amount)});
+    s.debts.push({player: p.id, receiver: receiverId, amount: Math.floor(amount), tileIndex: p.pos});
     settleDebts(s);
 }
 
@@ -239,6 +239,7 @@ function settleDebts(s) {
         if (payer.money < d.amount) return;
         
         payer.money -= d.amount;
+        addEvent(s, 'payment', {playerId: payer.id, amount: d.amount, tileIndex: d.tileIndex ?? payer.pos});
         
         if (d.receiver) {
             const creditor = s.players.find(p => p.id === d.receiver);
@@ -905,6 +906,7 @@ function invokeGameAction(s, p, data) {
                 throw new Error('Achat impossible.');
             }
             p.money -= tile.price;
+            addEvent(s, 'payment', {playerId: p.id, amount: tile.price, tileIndex: p.pos});
             tile.owner = p.id;
             announce(s, p, p.name + ' achète ' + tile.name + ' pour ' + tile.price + ' DH.', 'purchase');
             break;

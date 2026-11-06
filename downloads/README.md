@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.9
+# Quartiers Maroc pour Android — version 1.0.10
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.9.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.10.apk)
 
 Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
@@ -47,3 +47,7 @@ Une case « 🤖 Mode auto » apparaît près du nom du joueur connecté pendant
 ## Audio de refus — version 1.0.9
 
 Le fichier audio fourni par l’utilisateur est joué à la réception d’un événement de refus d’offre, pour chaque client connecté au salon. Les annulations et passages aux enchères ne déclenchent pas ce son. Le volume, le mode muet et la mise en arrière-plan restent respectés. Le MP3 original est embarqué sans conversion dans le web et l’APK. Quinze tests serveur et quinze tests Flutter/API passent ; la lecture réelle du média et le mode muet sont vérifiés dans Chromium. L’essai sur téléphone physique reste à effectuer.
+
+## Affichages et alerte — version 1.0.10
+
+Les paiements et achats réglés affichent le montant perdu sur la case ; une dette s’affiche au règlement seulement. La victoire présente le classement, l’argent et les biens, et une alerte sonore et visuelle signale le début du tour. Les animations et le son respectent les réglages existants.

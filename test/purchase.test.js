@@ -10,7 +10,7 @@ function engine(){
   return require(name.startsWith('.')?path.resolve(__dirname,'..',name):name);
  },process:{env:{}},console,setInterval:()=>({unref(){}}),Math:Object.assign(Object.create(Math),{random:()=>0})};
  vm.createContext(sandbox);
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.engine={invokeGameAction,invokeBotStep,newTiles,newPlayer};',sandbox);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.engine={invokeGameAction,invokeBotStep,newTiles,newPlayer,pay,settleDebts};',sandbox);
  return sandbox.engine;
 }
 function fixture(e){const p=e.newPlayer('Saïd'),friend=e.newPlayer('Ami');p.id='a';friend.id='b';p.money=1;p.pos=4;const s={phase:'playing',turn:0,players:[p,friend],tiles:e.newTiles(),rolled:false,deals:[],debts:[],offer:null,log:[],events:[],eventSeq:0};s.tiles[5].owner=p.id;return {p,s};}
@@ -46,4 +46,11 @@ test('refusing an offer broadcasts one sound event; cancel and invalid repeat do
  assert.throws(()=>e.invokeGameAction(s,p,{type:'rejectoffer'}));assert.equal(s.events.length,1);
  s.offer={buyer:other.id,seller:p.id,respondent:p.id,index:5};
  e.invokeGameAction(s,other,{type:'canceloffer'});assert.equal(s.events.length,1);
+});
+
+test('payment animation is emitted only when debt is paid, at its original square',()=>{
+ const e=engine(),{p,s}=fixture(e);p.pos=6;p.money=10;
+ e.pay(s,p,50,s.players[1]);assert.equal(s.events.length,0);assert.equal(p.money,10);
+ p.pos=7;p.money=70;e.settleDebts(s);assert.equal(p.money,20);
+ const event=s.events.find(x=>x.type==='payment');assert.equal(event.amount,50);assert.equal(event.tileIndex,6);
 });
