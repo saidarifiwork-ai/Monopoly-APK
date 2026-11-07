@@ -1,7 +1,7 @@
 # Quartiers Maroc — préparation Windows 3D
 
 Cette version est un **prototype de développement**, pas encore le jeu 3D final.
-Une scène Godot présente le plateau de 40 cases dans une ville stylisée, avec rues, bâtiments, arbres, véhicules et passants. La caméra inclinée peut être tournée et rapprochée.
+Une scène Godot présente le plateau de 40 cases dans une ville stylisée avec vue inclinée, cases colorées, rues, bâtiments, arbres, véhicules et personnages 3D, inspirée des images fournies. Certains modèles sont de Kenney, sous licence CC0 ; voir `assets/kenney/ATTRIBUTION.txt`. La caméra inclinée peut être tournée et rapprochée.
 Les formes placées sur les villes sont des silhouettes provisoires : elles ne
 représentent pas encore les monuments recherchés. Les dés sont représentés en 3D, les pions suivent les déplacements reçus du serveur et les paiements s’affichent sur les cases. Le son fourni pour un refus d’offre est repris ; les cartes, les autres sons et animations restent à adapter. Le prototype n'a pas été testé sur
 un PC Windows physique et les performances graphiques restent à vérifier.

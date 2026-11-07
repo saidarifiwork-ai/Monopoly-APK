@@ -25,8 +25,22 @@ func run() -> void:
 	if panel == null or panel.get_global_rect().position.x < 0:
 		fail("panneau visible à l’écran : " + str(panel.get_global_rect() if panel != null else "absent"))
 		return
+	for asset in ["city-commercial/building-a.glb", "car/taxi.glb", "mini-characters/character-male-a.glb"]:
+		if load("res://assets/kenney/" + asset) == null:
+			fail("modèle 3D manquant : " + asset)
+			return
 	if scene.labels.size() != 40:
 		fail("les 40 cases")
+		return
+	if not scene.labels[1].text.contains("60 DH") or not scene.tile_colors[1].visible or scene.tile_colors[2].visible:
+		fail("prix et couleurs des cases")
+		return
+	var default_dots := 0
+	for pip in scene.dice_pips[0]:
+		if pip.visible:
+			default_dots += 1
+	if default_dots != 2:
+		fail("points des dés")
 		return
 	scene.api.server = "http://127.0.0.1:8799"
 	var made: Dictionary = await scene.api.create_room("Test PC")
@@ -83,7 +97,7 @@ func run() -> void:
 	scene.state = sample
 	scene.update_state()
 	await create_timer(0.6).timeout
-	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.37, 0)
+	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.12, 0)
 	if scene.pawns[sample.players[0].id].position.distance_to(expected) > 0.02 or scene.dice_labels[0].text != "6" or scene.dice_labels[1].text != "2":
 		fail("dés et chemin animé du pion")
 		return

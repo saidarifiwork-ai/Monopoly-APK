@@ -5,6 +5,9 @@ signal request_idle
 const GameApi = preload("res://scripts/game_api.gd")
 const CITY_TILES := [1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 29, 31, 32, 34, 37, 39]
 const COLORS := [Color("d9483b"), Color("4383bc"), Color("bd8b32"), Color("986ab6"), Color("408558"), Color("bc617b")]
+const PROPERTY_GROUPS := [[1, 3], [6, 8, 9], [11, 13, 14], [16, 18, 19], [21, 23, 24], [26, 27, 29], [31, 32, 34], [37, 39]]
+const GROUP_COLORS := [Color("905b42"), Color("91cbdc"), Color("d54b94"), Color("ed9136"), Color("d94343"), Color("efd352"), Color("29905b"), Color("3164ab")]
+const DEFAULT_PRICES := {1: 60, 3: 60, 5: 200, 6: 100, 8: 100, 9: 120, 11: 140, 12: 150, 13: 140, 14: 160, 15: 200, 16: 180, 18: 180, 19: 200, 21: 220, 23: 220, 24: 240, 25: 200, 26: 260, 27: 260, 28: 150, 29: 280, 31: 300, 32: 300, 34: 320, 35: 200, 37: 350, 39: 400}
 const DEFAULT_NAMES := ["Départ", "Chefchaouen", "Caisse commune", "Tétouan", "Impôts", "Gare de Fès", "Oujda", "Chance", "Nador", "Al Hoceïma", "Prison", "Meknès", "Électricité", "Fès", "Ifrane", "Gare de Marrakech", "El Jadida", "Caisse commune", "Safi", "Essaouira", "Parc gratuit", "Agadir", "Chance", "Marrakech", "Ouarzazate", "Gare de Tanger", "Tanger", "Kénitra", "Compagnie des eaux", "Larache", "Allez en prison", "Rabat", "Salé", "Caisse commune", "Témara", "Gare de Bouskoura", "Chance", "Casablanca", "Taxe de luxe", "Victoria"]
 
 var api = GameApi.new()
@@ -15,9 +18,9 @@ var tile_colors: Array[MeshInstance3D] = []
 var ownership_markers: Array[Node3D] = []
 var tile_visuals := {}
 var tile_color_values := {}
-var city_batches := {}
 var dice_nodes: Array[Node3D] = []
 var dice_labels: Array[Label3D] = []
+var dice_pips: Array[Array] = []
 var pawn_tweens := {}
 var last_event_seq := -1
 var last_round := -1
@@ -140,17 +143,35 @@ func build_world() -> void:
 	build_city()
 	box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("66412e"))
 	box(self, Vector3(11.3, 0.22, 11.3), Vector3(0, -0.22, 0), Color("d8c89d"))
-	box(self, Vector3(8.7, 0.10, 8.7), Vector3(0, -0.04, 0), Color("478461"))
+	box(self, Vector3(8.7, 0.10, 8.7), Vector3(0, -0.04, 0), Color("809b4e"))
 	for i in range(40):
 		var pos := tile_position(i)
 		box(self, Vector3(0.96, 0.10, 0.96), pos, Color("f2ead6") if i % 2 == 0 else Color("e2e5cc"))
-		var band := box(self, Vector3(0.86, 0.07, 0.13), pos + Vector3(0, 0.09, -0.36), Color("9d977b"))
+		var group_color := Color("9d977b")
+		for group_index in range(PROPERTY_GROUPS.size()):
+			if i in PROPERTY_GROUPS[group_index]:
+				group_color = GROUP_COLORS[group_index]
+				break
+		var band_offset := Vector3(0, 0.09, -0.36)
+		if i > 10 and i < 20:
+			band_offset = Vector3(0.36, 0.09, 0)
+		elif i > 20 and i < 30:
+			band_offset = Vector3(0, 0.09, 0.36)
+		elif i > 30:
+			band_offset = Vector3(-0.36, 0.09, 0)
+		var band := box(self, Vector3(0.86, 0.07, 0.13), pos + band_offset, group_color)
+		if (i > 10 and i < 20) or i > 30:
+			band.rotation.y = PI / 2
+		band.visible = i in CITY_TILES
 		tile_colors.append(band)
 		var markers := Node3D.new()
 		markers.position = pos
 		add_child(markers)
 		ownership_markers.append(markers)
-		labels.append(label_on_tile(DEFAULT_NAMES[i], pos))
+		var tile_text: String = DEFAULT_NAMES[i]
+		if DEFAULT_PRICES.has(i):
+			tile_text += "\n" + str(DEFAULT_PRICES[i]) + " DH"
+		labels.append(label_on_tile(tile_text, pos))
 		if i == 39:
 			# Victoria is the player's neighbourhood: a fictional little district.
 			for dx in [-0.22, 0.0, 0.22]:
@@ -160,6 +181,10 @@ func build_world() -> void:
 			# Placeholder silhouettes: not a researched representation of a real city.
 			box(self, Vector3(0.24, 0.28, 0.22), pos + Vector3(0, 0.23, -0.12), Color("e9c99c"))
 			cylinder(self, 0.19, 0.13, pos + Vector3(0, 0.44, -0.12), Color("b55b42"), 0.02)
+	# Two centre features echo the card piles and community chest.
+	box(self, Vector3(1.2, 0.48, 0.85), Vector3(-2.4, 0.30, -1.8), Color("e9efe8"))
+	box(self, Vector3(0.94, 0.12, 0.72), Vector3(-2.4, 0.60, -1.8), Color("70b6c0"))
+	box(self, Vector3(0.74, 0.06, 0.10), Vector3(-2.4, 0.68, -1.8), Color("f5f3dd"))
 	box(self, Vector3(1.2, 0.10, 0.85), Vector3(-2.4, 0.12, -1.8), Color("f2dfb3"))
 	box(self, Vector3(1.0, 0.08, 0.66), Vector3(-2.4, 0.21, -1.8), Color("d07f42"))
 	box(self, Vector3(1.2, 0.10, 0.85), Vector3(2.4, 0.12, 1.8), Color("f2dfb3"))
@@ -168,6 +193,8 @@ func build_world() -> void:
 		for z in [-2.5, 2.5]:
 			var board_motif := box(self, Vector3(0.6, 0.035, 0.6), Vector3(x, 0.035, z), Color("d8bf82"))
 			board_motif.rotation.y = PI / 4
+	box(self, Vector3(5.7, 0.05, 1.35), Vector3(0, 0.04, 0), Color("e6c89c"))
+	box(self, Vector3(5.25, 0.06, 1.02), Vector3(0, 0.10, 0), Color("d85043"))
 	for i in range(2):
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
@@ -181,16 +208,25 @@ func build_world() -> void:
 		face.pixel_size = 0.007
 		face.modulate = Color("183c33")
 		face.outline_size = 0
+		face.visible = false
 		die.add_child(face)
+		var dots: Array = []
+		for row in range(3):
+			for col in range(3):
+				var dot := cylinder(die, 0.055, 0.012, Vector3((col - 1) * 0.16, 0.297, (row - 1) * 0.16), Color("202c2a"))
+				dot.visible = (row * 3 + col) in ([0, 8] if i == 0 else [0, 2, 4, 6, 8])
+				dots.append(dot)
+		dice_pips.append(dots)
 		dice_nodes.append(die)
 		dice_labels.append(face)
 	var title := Label3D.new()
-	title.text = "QUARTIERS\nMAROC"
-	title.position = Vector3(0, 0.20, 0)
+	title.text = "QUARTIERS MAROC"
+	title.position = Vector3(0, 0.18, 0)
 	title.rotation.x = -PI / 2
 	title.font_size = 100
-	title.pixel_size = 0.009
-	title.modulate = Color("f8e8c7")
+	title.pixel_size = 0.0056
+	title.modulate = Color("fffdf4")
+	title.outline_size = 0
 	add_child(title)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -200,7 +236,7 @@ func build_world() -> void:
 
 # A stylised city surrounds the shared board; these are not landmark replicas.
 func build_city() -> void:
-	box(self, Vector3(40, 0.3, 40), Vector3(0, -1.22, 0), Color("8ab760"))
+	box(self, Vector3(40, 0.3, 40), Vector3(0, -1.22, 0), Color("a1b0a9"))
 	for side in [-1, 1]:
 		box(self, Vector3(40, 0.07, 2.8), Vector3(0, -1.02, side * 9.0), Color("6f7774"))
 		box(self, Vector3(2.8, 0.07, 40), Vector3(side * 9.0, -1.01, 0), Color("6f7774"))
@@ -218,7 +254,13 @@ func build_city() -> void:
 			make_building(Vector3(i * 4.4, -0.9, side * 13.0), i + side * 3, side < 0)
 	for side in [-1, 1]:
 		for i in range(-1, 2):
-			make_building(Vector3(side * 14.0, -0.9, i * 5.0), i + side * 7, side < 0)
+			if side == -1 and i == 0:
+				make_tower(Vector3(-14.0, -0.9, 0))
+			else:
+				make_building(Vector3(side * 14.0, -0.9, i * 5.0), i + side * 7, side < 0)
+	for side in [-1, 1]:
+		for n in [-13, 13]:
+			box(self, Vector3(3.1, 0.035, 1.9), Vector3(n, -1.035, side * 6.5), Color("82a95f"))
 	for side in [-1, 1]:
 		for n in [-15, -11, -5, 0, 5, 11, 15]:
 			make_tree(Vector3(n, -0.9, side * 6.8), n + side)
@@ -229,7 +271,6 @@ func build_city() -> void:
 	for n in [-5, -2, 2, 5]:
 		make_pedestrian(Vector3(n, -0.88, 7.3), n)
 		make_pedestrian(Vector3(7.3, -0.88, n), n + 2)
-	flush_city_details()
 	for x in [-6.6, 6.6]:
 		for z in [-6.6, 6.6]:
 			cylinder(self, 0.05, 1.25, Vector3(x, -0.25, z), Color("2f4742"))
@@ -242,81 +283,61 @@ func build_city() -> void:
 			lamp.position = Vector3(x, 0.46, z)
 			add_child(lamp)
 
-func make_building(pos: Vector3, variant: int, _reverse: bool) -> void:
-	var palette := [Color("e9b98e"), Color("d98b6e"), Color("e4d5b7"), Color("85b4a5"), Color("cba48c")]
-	var tone: Color = palette[absi(variant) % palette.size()]
-	var floors := 2 + absi(variant) % 2
-	var height := float(floors) * 0.9
-	box(self, Vector3(2.55, height, 2.0), pos + Vector3(0, height / 2, 0), tone)
-	box(self, Vector3(2.72, 0.17, 2.17), pos + Vector3(0, height + 0.08, 0), Color("f1dfbf"))
-	box(self, Vector3(2.25, 0.13, 1.75), pos + Vector3(0, height + 0.23, 0), Color("788983"))
-	for face in [-1, 1]:
-		var face_z: float = face * 1.03
-		for floor in range(floors):
-			for col in [-1, 0, 1]:
-				var window_pos := pos + Vector3(col * 0.68, 0.55 + floor * 0.9, face_z)
-				city_detail_box(Vector3(0.46, 0.60, 0.08), window_pos, Color("f5e2bf"))
-				city_detail_box(Vector3(0.33, 0.47, 0.10), window_pos + Vector3(0, 0, face * 0.06), Color("51868b"))
-		box(self, Vector3(0.48, 0.8, 0.13), pos + Vector3(0, 0.40, face_z + face * 0.12), Color("534d42"))
-	for face in [-1, 1]:
-		for floor in range(floors):
-			for col in [-1, 0, 1]:
-				var side_window := pos + Vector3(face * 1.30, 0.55 + floor * 0.9, col * 0.50)
-				city_detail_box(Vector3(0.08, 0.60, 0.38), side_window, Color("f5e2bf"))
-				city_detail_box(Vector3(0.10, 0.47, 0.27), side_window + Vector3(face * 0.06, 0, 0), Color("51868b"))
+func make_tower(pos: Vector3) -> void:
+	var model := add_kenney_model("city-commercial/building-skyscraper-a.glb", pos, 2.1, 0.0)
+	if model != null:
+		tint_model(model, Color("f0dbb2"))
+		cylinder(self, 0.74, 1.1, pos + Vector3(0, 6.50, 0), Color("d9b457"), 0.08)
+		cylinder(self, 0.12, 0.32, pos + Vector3(0, 7.18, 0), Color("736044"), 0.02)
 
-# Windows share a few GPU batches instead of hundreds of separate meshes.
-func city_detail_box(size: Vector3, pos: Vector3, color: Color) -> void:
-	var key := str(size) + ":" + color.to_html(false)
-	if not city_batches.has(key):
-		city_batches[key] = {"size": size, "color": color, "positions": []}
-	city_batches[key].positions.append(pos)
+func make_building(pos: Vector3, variant: int, reverse: bool) -> void:
+	var names := ["a", "b", "c", "d", "f", "g", "h", "i", "l"]
+	var model_name: String = names[absi(variant) % names.size()]
+	var model := add_kenney_model("city-commercial/building-" + model_name + ".glb", pos, 2.25, PI if reverse else 0.0)
+	var pastel := [Color("e9c1a6"), Color("e5b0a1"), Color("f4dfbf"), Color("a5cfc5"), Color("eacba7")]
+	if model != null:
+		tint_model(model, pastel[absi(variant) % pastel.size()])
 
-func flush_city_details() -> void:
-	for key in city_batches:
-		var detail: Dictionary = city_batches[key]
-		var mesh := BoxMesh.new()
-		mesh.size = detail.size
-		var instances := MultiMesh.new()
-		instances.transform_format = MultiMesh.TRANSFORM_3D
-		instances.mesh = mesh
-		instances.instance_count = detail.positions.size()
-		for i in range(detail.positions.size()):
-			instances.set_instance_transform(i, Transform3D(Basis.IDENTITY, detail.positions[i]))
-		var node := MultiMeshInstance3D.new()
-		node.multimesh = instances
-		node.material_override = material(detail.color)
-		add_child(node)
-	city_batches.clear()
+func tint_model(node: Node, tint: Color) -> void:
+	if node is MeshInstance3D and node.mesh != null:
+		for surface in range(node.mesh.get_surface_count()):
+			var source: Material = node.get_active_material(surface)
+			if source is BaseMaterial3D:
+				var variant := source.duplicate() as BaseMaterial3D
+				variant.albedo_color *= tint
+				node.set_surface_override_material(surface, variant)
+	for child in node.get_children():
+		tint_model(child, tint)
+
+func add_kenney_model(path: String, pos: Vector3, scale_value: float, angle: float) -> Node3D:
+	var prefab: PackedScene = load("res://assets/kenney/" + path)
+	if prefab == null:
+		return null
+	var instance := prefab.instantiate() as Node3D
+	instance.position = pos
+	instance.scale = Vector3.ONE * scale_value
+	instance.rotation.y = angle
+	add_child(instance)
+	return instance
 
 func make_vehicle(pos: Vector3, angle: float, paint: Color) -> void:
-	var car := Node3D.new()
-	car.position = pos
-	car.rotation.y = angle
-	add_child(car)
-	box(car, Vector3(0.85, 0.24, 0.44), Vector3(0, 0.06, 0), paint)
-	box(car, Vector3(0.40, 0.22, 0.38), Vector3(0.05, 0.28, 0), Color("9ac6ca"))
-	for x in [-0.25, 0.25]:
-		for z in [-0.24, 0.24]:
-			var wheel := cylinder(car, 0.09, 0.08, Vector3(x, -0.04, z), Color("343c39"))
-			wheel.rotation.x = PI / 2
+	var model := "taxi" if paint == Color("e6a632") else ("sedan" if paint == Color("c76155") else "hatchback-sports")
+	var car := add_kenney_model("car/" + model + ".glb", pos, 0.35, angle + PI / 2)
+	if car != null:
+		var travel := Vector3(2.2, 0, 0) if absf(sin(angle)) < 0.5 else Vector3(0, 0, 2.2)
+		var route := create_tween().set_loops()
+		route.tween_property(car, "position", pos + travel, 5.0)
+		route.tween_property(car, "position", pos, 5.0)
 
 func make_pedestrian(pos: Vector3, variant: int) -> void:
-	var person := Node3D.new()
-	person.position = pos
-	add_child(person)
-	var shirts := [Color("c84f45"), Color("477d9a"), Color("e2a84b"), Color("5d8f5c")]
-	cylinder(person, 0.10, 0.30, Vector3(0, 0.28, 0), shirts[absi(variant) % shirts.size()])
-	var head := MeshInstance3D.new()
-	var shape := SphereMesh.new()
-	shape.radius = 0.10
-	shape.height = 0.20
-	shape.radial_segments = 10
-	shape.rings = 5
-	head.mesh = shape
-	head.material_override = material(Color("e6b691"))
-	head.position = Vector3(0, 0.53, 0)
-	person.add_child(head)
+	var characters := ["male-a", "male-b", "female-a", "female-b"]
+	var model_name: String = characters[absi(variant) % characters.size()]
+	var person := add_kenney_model("mini-characters/character-" + model_name + ".glb", pos, 1.2, 0.0)
+	if person != null:
+		var travel := Vector3(0.7, 0, 0) if absf(pos.z) > 7.0 else Vector3(0, 0, 0.7)
+		var stroll := create_tween().set_loops()
+		stroll.tween_property(person, "position", pos + travel, 3.5)
+		stroll.tween_property(person, "position", pos, 3.5)
 
 func make_tree(pos: Vector3, variant: int) -> void:
 	cylinder(self, 0.12, 0.72, pos + Vector3(0, 0.36, 0), Color("865b42"))
@@ -528,8 +549,12 @@ func update_state() -> void:
 		elif event.get("type", "") == "payment":
 			show_payment(event)
 	var dice: Array = state.get("dice", [])
+	var patterns := [[4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]]
 	for i in range(min(dice.size(), dice_labels.size())):
-		dice_labels[i].text = str(int(dice[i]))
+		var value := clampi(int(dice[i]), 1, 6)
+		dice_labels[i].text = str(value)
+		for pip in range(dice_pips[i].size()):
+			dice_pips[i][pip].visible = pip in patterns[value - 1]
 	if new_events.any(func(event): return event.get("type", "") == "dice"):
 		for die in dice_nodes:
 			die.rotation.y = 0.0
@@ -546,19 +571,18 @@ func update_state() -> void:
 		var pawn: MeshInstance3D
 		var is_new: bool = not pawns.has(player.id)
 		if is_new:
-			pawn = cylinder(self, 0.17, 0.40, Vector3.ZERO, COLORS[i % COLORS.size()])
-			var head := MeshInstance3D.new()
-			var head_mesh := SphereMesh.new()
-			head_mesh.radius = 0.14
-			head_mesh.height = 0.28
-			head.mesh = head_mesh
-			head.material_override = material(Color("f2c9a5"))
-			head.position = Vector3(0, 0.29, 0)
-			pawn.add_child(head)
+			pawn = cylinder(self, 0.19, 0.12, Vector3.ZERO, COLORS[i % COLORS.size()])
+			var characters := ["male-a", "female-a", "male-b", "female-b"]
+			var prefab: PackedScene = load("res://assets/kenney/mini-characters/character-" + characters[i % characters.size()] + ".glb")
+			if prefab != null:
+				var figure := prefab.instantiate() as Node3D
+				figure.position.y = 0.06
+				figure.scale = Vector3.ONE * 0.9
+				pawn.add_child(figure)
 			pawns[player.id] = pawn
 		else:
 			pawn = pawns[player.id]
-		var offset := Vector3((i % 3 - 1) * 0.22, 0.37, int(i / 3) * 0.22)
+		var offset := Vector3((i % 3 - 1) * 0.22, 0.12, int(i / 3) * 0.22)
 		var path: Array = []
 		if not is_new:
 			for event in new_events:
@@ -580,6 +604,8 @@ func update_state() -> void:
 	last_turn_key = turn_key
 	for i in range(min(tiles.size(), labels.size())):
 		labels[i].text = str(tiles[i].name)
+		if int(tiles[i].get("price", 0)) > 0:
+			labels[i].text += "\n" + str(int(tiles[i].price)) + " DH"
 		var c := str(tiles[i].get("color", ""))
 		if c.begins_with("#") and tile_color_values.get(i, "") != c:
 			tile_colors[i].material_override = material(Color(c))

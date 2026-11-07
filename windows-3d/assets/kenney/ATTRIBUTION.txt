@@ -1,0 +1,6 @@
+Modèles 3D City Kit - Commercial, Car Kit et Mini Characters
+Créés par Kenney (https://kenney.nl), licence Creative Commons CC0 1.0.
+Source utilisée : https://github.com/shorepine/kenney/tree/3694c6879e487c108f55677be7dd2ca75b07cc3b/3d
+La description et la licence CC0 de cette distribution figurent dans son README :
+https://github.com/shorepine/kenney/blob/3694c6879e487c108f55677be7dd2ca75b07cc3b/README.md
+Texte CC0 : https://creativecommons.org/publicdomain/zero/1.0/

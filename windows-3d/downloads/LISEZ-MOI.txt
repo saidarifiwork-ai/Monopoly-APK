@@ -1,4 +1,5 @@
 QUARTIERS MAROC 3D — PROTOTYPE WINDOWS
+Ville stylisée inspirée des images de référence
 
 1. Extrais tous les fichiers de cette archive.
 2. Ouvre Quartiers-Maroc-3D-prototype.exe.
@@ -12,5 +13,8 @@ les cartes, plusieurs animations et la validation sur un PC Windows réel resten
 
 Pour revenir à l’accueil, utilise le bouton prévu : un robot prend le relais et
 la session peut être reprise sur le même ordinateur.
+
+Les modèles de la ville proviennent notamment de Kenney (CC0) ; leur attribution
+figure dans KENNEY-ATTRIBUTION.txt.
 
 Logiciel créé avec Godot Engine. Sa licence est fournie dans GODOT-LICENSE.txt.
