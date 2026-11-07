@@ -49,7 +49,7 @@ var state: Dictionary = {}
 var action_key := ""
 var view_angle := 0.65
 var view_elevation := 0.9
-var view_distance := 18.5
+var view_distance := 16.5
 var session_file := "user://quartiers-session.cfg"
 var saved_session: Dictionary = {}
 var saved_server := ""
@@ -102,27 +102,57 @@ func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, color:
 	return node
 
 func tile_position(index: int) -> Vector3:
-	if index <= 10:
-		return Vector3(5.0 - index, 0, 5.0)
-	if index <= 20:
-		return Vector3(-5.0, 0, 5.0 - (index - 10))
-	if index <= 30:
-		return Vector3(-5.0 + index - 20, 0, -5.0)
-	return Vector3(5.0, 0, -5.0 + index - 30)
+	if index == 0:
+		return Vector3(5.12, 0, 5.12)
+	if index < 10:
+		return Vector3(5.0 - index, 0, 5.12)
+	if index == 10:
+		return Vector3(-5.12, 0, 5.12)
+	if index < 20:
+		return Vector3(-5.12, 0, 5.0 - (index - 10))
+	if index == 20:
+		return Vector3(-5.12, 0, -5.12)
+	if index < 30:
+		return Vector3(-5.0 + index - 20, 0, -5.12)
+	if index == 30:
+		return Vector3(5.12, 0, -5.12)
+	return Vector3(5.12, 0, -5.0 + index - 30)
 
-func label_on_tile(text: String, pos: Vector3) -> Label3D:
+func tile_rotation(index: int) -> float:
+	if index > 10 and index < 20:
+		return -PI / 2
+	if index >= 20 and index < 30:
+		return PI
+	if index >= 30:
+		return PI / 2
+	return 0.0
+
+func label_on_tile(text: String, pos: Vector3, index: int) -> Label3D:
 	var label := Label3D.new()
 	label.text = text
-	label.position = pos + Vector3(0, 0.06, 0.12)
-	label.rotation.x = -PI / 2
-	label.font_size = 36
-	label.pixel_size = 0.0034
-	label.modulate = Color("173d32")
-	label.outline_size = 2
-	label.outline_modulate = Color("f6f1df")
+	label.position = pos + Vector3(0, 0.075, 0.10).rotated(Vector3.UP, tile_rotation(index))
+	label.rotation = Vector3(-PI / 2, 0, 0)
+	label.rotate_y(tile_rotation(index))
+	label.font_size = 32
+	label.pixel_size = 0.0028
+	label.modulate = Color("172521")
+	label.outline_size = 0
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	add_child(label)
 	return label
+
+func board_symbol(text: String, pos: Vector3, index: int, color: Color) -> void:
+	var symbol := Label3D.new()
+	symbol.text = text
+	symbol.font_size = 80
+	symbol.pixel_size = 0.0042
+	symbol.modulate = color
+	symbol.outline_size = 2
+	symbol.outline_modulate = Color("fff7dc")
+	symbol.position = pos + Vector3(0, 0.085, -0.27).rotated(Vector3.UP, tile_rotation(index))
+	symbol.rotation = Vector3(-PI / 2, 0, 0)
+	symbol.rotate_y(tile_rotation(index))
+	add_child(symbol)
 
 func build_world() -> void:
 	var env := WorldEnvironment.new()
@@ -141,27 +171,24 @@ func build_world() -> void:
 	light.shadow_enabled = true
 	add_child(light)
 	build_city()
-	box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("66412e"))
-	box(self, Vector3(11.3, 0.22, 11.3), Vector3(0, -0.22, 0), Color("d8c89d"))
-	box(self, Vector3(8.7, 0.10, 8.7), Vector3(0, -0.04, 0), Color("809b4e"))
+	# The playing surface is a ring of rectangular cards and larger corner cards.
+	box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("b69d70"))
+	box(self, Vector3(11.7, 0.22, 11.7), Vector3(0, -0.22, 0), Color("426453"))
+	box(self, Vector3(8.95, 0.10, 8.95), Vector3(0, -0.04, 0), Color("9dce37"))
 	for i in range(40):
 		var pos := tile_position(i)
-		box(self, Vector3(0.96, 0.10, 0.96), pos, Color("f2ead6") if i % 2 == 0 else Color("e2e5cc"))
+		var corner := i % 10 == 0
+		var side := (i > 10 and i < 20) or i > 30
+		var dimensions := Vector3(1.20, 0.10, 1.20) if corner else (Vector3(1.20, 0.10, 0.96) if side else Vector3(0.96, 0.10, 1.20))
+		box(self, dimensions, pos, Color("dcebd0"))
 		var group_color := Color("9d977b")
 		for group_index in range(PROPERTY_GROUPS.size()):
 			if i in PROPERTY_GROUPS[group_index]:
 				group_color = GROUP_COLORS[group_index]
 				break
-		var band_offset := Vector3(0, 0.09, -0.36)
-		if i > 10 and i < 20:
-			band_offset = Vector3(0.36, 0.09, 0)
-		elif i > 20 and i < 30:
-			band_offset = Vector3(0, 0.09, 0.36)
-		elif i > 30:
-			band_offset = Vector3(-0.36, 0.09, 0)
-		var band := box(self, Vector3(0.86, 0.07, 0.13), pos + band_offset, group_color)
-		if (i > 10 and i < 20) or i > 30:
-			band.rotation.y = PI / 2
+		var band_offset := Vector3(0, 0.09, -0.49).rotated(Vector3.UP, tile_rotation(i))
+		var band := box(self, Vector3(0.88, 0.06, 0.16), pos + band_offset, group_color)
+		band.rotation.y = tile_rotation(i)
 		band.visible = i in CITY_TILES
 		tile_colors.append(band)
 		var markers := Node3D.new()
@@ -171,30 +198,37 @@ func build_world() -> void:
 		var tile_text: String = DEFAULT_NAMES[i]
 		if DEFAULT_PRICES.has(i):
 			tile_text += "\n" + str(DEFAULT_PRICES[i]) + " DH"
-		labels.append(label_on_tile(tile_text, pos))
-		if i == 39:
-			# Victoria is the player's neighbourhood: a fictional little district.
-			for dx in [-0.22, 0.0, 0.22]:
-				box(self, Vector3(0.18, 0.25, 0.20), pos + Vector3(dx, 0.22, -0.12), Color("e9c99c"))
-				cylinder(self, 0.14, 0.11, pos + Vector3(dx, 0.40, -0.12), Color("b55b42"), 0.02)
-		elif i in CITY_TILES:
-			# Placeholder silhouettes: not a researched representation of a real city.
-			box(self, Vector3(0.24, 0.28, 0.22), pos + Vector3(0, 0.23, -0.12), Color("e9c99c"))
-			cylinder(self, 0.19, 0.13, pos + Vector3(0, 0.44, -0.12), Color("b55b42"), 0.02)
-	# Two centre features echo the card piles and community chest.
-	box(self, Vector3(1.2, 0.48, 0.85), Vector3(-2.4, 0.30, -1.8), Color("e9efe8"))
-	box(self, Vector3(0.94, 0.12, 0.72), Vector3(-2.4, 0.60, -1.8), Color("70b6c0"))
-	box(self, Vector3(0.74, 0.06, 0.10), Vector3(-2.4, 0.68, -1.8), Color("f5f3dd"))
-	box(self, Vector3(1.2, 0.10, 0.85), Vector3(-2.4, 0.12, -1.8), Color("f2dfb3"))
-	box(self, Vector3(1.0, 0.08, 0.66), Vector3(-2.4, 0.21, -1.8), Color("d07f42"))
-	box(self, Vector3(1.2, 0.10, 0.85), Vector3(2.4, 0.12, 1.8), Color("f2dfb3"))
-	box(self, Vector3(1.0, 0.08, 0.66), Vector3(2.4, 0.21, 1.8), Color("5d9da0"))
-	for x in [-2.5, 2.5]:
-		for z in [-2.5, 2.5]:
-			var board_motif := box(self, Vector3(0.6, 0.035, 0.6), Vector3(x, 0.035, z), Color("d8bf82"))
-			board_motif.rotation.y = PI / 4
-	box(self, Vector3(5.7, 0.05, 1.35), Vector3(0, 0.04, 0), Color("e6c89c"))
-	box(self, Vector3(5.25, 0.06, 1.02), Vector3(0, 0.10, 0), Color("d85043"))
+		labels.append(label_on_tile(tile_text, pos, i))
+		if i in [7, 22, 36]:
+			board_symbol("?", pos, i, Color("dc2b87"))
+		elif i in [2, 17, 33]:
+			board_symbol("✦", pos, i, Color("32a9c6"))
+		elif i in [5, 15, 25, 35]:
+			board_symbol("♜", pos, i, Color("222b28"))
+		elif i == 0:
+			board_symbol("➜", pos, i, Color("dc4836"))
+		elif i in [10, 20, 30]:
+			board_symbol("★", pos, i, Color("de8c28"))
+	# Coloured corners of the centre carry the two familiar card piles.
+	cylinder(self, 1.55, 0.03, Vector3(-2.65, 0.035, -2.65), Color("e6a276"))
+	cylinder(self, 1.55, 0.03, Vector3(2.65, 0.035, 2.65), Color("e6a276"))
+	box(self, Vector3(1.28, 0.06, 0.96), Vector3(-2.65, 0.08, -2.65), Color("fff8e7"))
+	box(self, Vector3(1.1, 0.34, 0.75), Vector3(-2.65, 0.28, -2.65), Color("85c9db"))
+	box(self, Vector3(1.17, 0.09, 0.82), Vector3(-2.65, 0.49, -2.65), Color("eff9f4"))
+	box(self, Vector3(0.9, 0.04, 0.50), Vector3(-2.65, 0.55, -2.65), Color("55adca"))
+	box(self, Vector3(1.28, 0.07, 0.96), Vector3(2.65, 0.09, 2.65), Color("fff8e7"))
+	box(self, Vector3(1.12, 0.07, 0.80), Vector3(2.65, 0.16, 2.65), Color("fa8c22"))
+	var question := Label3D.new()
+	question.text = "?"
+	question.position = Vector3(2.65, 0.21, 2.65)
+	question.rotation.x = -PI / 2
+	question.font_size = 100
+	question.pixel_size = 0.005
+	question.outline_size = 0
+	add_child(question)
+	box(self, Vector3(5.9, 0.05, 1.45), Vector3(0, 0.04, 0), Color("e9bb79"))
+	box(self, Vector3(5.55, 0.06, 1.17), Vector3(0, 0.10, 0), Color("fff9e7"))
+	box(self, Vector3(5.28, 0.06, 0.94), Vector3(0, 0.14, 0), Color("e74d3e"))
 	for i in range(2):
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
@@ -221,7 +255,7 @@ func build_world() -> void:
 		dice_labels.append(face)
 	var title := Label3D.new()
 	title.text = "QUARTIERS MAROC"
-	title.position = Vector3(0, 0.18, 0)
+	title.position = Vector3(0, 0.19, 0)
 	title.rotation.x = -PI / 2
 	title.font_size = 100
 	title.pixel_size = 0.0056

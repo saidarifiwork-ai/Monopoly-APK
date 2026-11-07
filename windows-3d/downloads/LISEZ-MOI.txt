@@ -1,5 +1,5 @@
 QUARTIERS MAROC 3D — PROTOTYPE WINDOWS
-Ville stylisée inspirée des images de référence
+Plateau 3D inspiré des images de référence, avec les villes marocaines
 
 1. Extrais tous les fichiers de cette archive.
 2. Ouvre Quartiers-Maroc-3D-prototype.exe.
