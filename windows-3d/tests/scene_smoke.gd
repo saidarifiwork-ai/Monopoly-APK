@@ -40,6 +40,13 @@ func run() -> void:
 	if not scene.tile_details.text.contains("Chefchaouen") or not scene.tile_details.text.contains("60 DH"):
 		fail("lecture agrandie de la case et de son prix")
 		return
+	var hop_pawn := Node3D.new()
+	scene.add_child(hop_pawn)
+	scene.animate_pawn_hop(0.5, hop_pawn, Vector3.ZERO, Vector3(1, 0, 0))
+	if absf(hop_pawn.position.x - 0.5) > 0.01 or hop_pawn.position.y < 0.2:
+		fail("saut du pion entre deux cases")
+		return
+	hop_pawn.queue_free()
 	var default_dots := 0
 	for pip in scene.dice_pips[0]:
 		if pip.visible:
@@ -99,6 +106,9 @@ func run() -> void:
 	if scene.view_distance != 13.0:
 		fail("zoom du joueur conservé pendant les actualisations")
 		return
+	if not scene.roll_button.visible:
+		fail("bouton de lancer affiché quand c’est son tour")
+		return
 	if not has_button(scene, "Lancer pour l’ordre"):
 		fail("commande de tirage")
 		return
@@ -129,6 +139,9 @@ func run() -> void:
 	]
 	scene.state = sample
 	scene.update_state()
+	if scene.roll_button.visible:
+		fail("bouton de lancer masqué après le lancer")
+		return
 	await create_timer(0.6).timeout
 	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.12, 0)
 	if scene.follow_anchor.distance_to(expected) > 0.6:

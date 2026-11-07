@@ -54,6 +54,7 @@ var view_distance := 18.5
 var focused_board := false
 var focus_overlay: ColorRect
 var map_button: Button
+var roll_button: Button
 var map_overview := false
 var follow_anchor := Vector3.ZERO
 var follow_anchor_valid := false
@@ -569,6 +570,28 @@ func build_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 2
 	add_child(layer)
+	roll_button = Button.new()
+	roll_button.text = "LANCER LES DÉS"
+	roll_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	roll_button.position = Vector2(-215, -105)
+	roll_button.size = Vector2(210, 70)
+	roll_button.add_theme_font_size_override("font_size", 20)
+	var roll_style := StyleBoxFlat.new()
+	roll_style.bg_color = Color("c65a20")
+	roll_style.border_color = Color("fff4d6")
+	roll_style.set_border_width_all(3)
+	roll_style.set_corner_radius_all(14)
+	roll_button.add_theme_stylebox_override("normal", roll_style)
+	var roll_hover := roll_style.duplicate() as StyleBoxFlat
+	roll_hover.bg_color = Color("e3772b")
+	roll_button.add_theme_stylebox_override("hover", roll_hover)
+	roll_button.visible = false
+	roll_button.pressed.connect(func():
+		if str(state.get("phase", "")) == "opening":
+			send_action("orderroll")
+		elif str(state.get("phase", "")) == "playing":
+			send_action("roll"))
+	layer.add_child(roll_button)
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.position = Vector2(-370, 18)
@@ -702,6 +725,10 @@ func send_action(kind: String, fields: Dictionary = {}) -> void:
 		return
 	refresh()
 
+func animate_pawn_hop(progress: float, pawn: Node3D, from: Vector3, to: Vector3) -> void:
+	if is_instance_valid(pawn):
+		pawn.position = from.lerp(to, progress) + Vector3(0, sin(progress * PI) * 0.24, 0)
+
 func update_state() -> void:
 	var players: Array = state.get("players", [])
 	var tiles: Array = state.get("tiles", [])
@@ -739,8 +766,9 @@ func update_state() -> void:
 			dice_pips[i][pip].visible = pip in patterns[value - 1]
 	if new_events.any(func(event): return event.get("type", "") == "dice"):
 		for die in dice_nodes:
-			die.rotation.y = 0.0
-			var spin := create_tween()
+			die.rotation = Vector3.ZERO
+			var spin := create_tween().set_parallel(true)
+			spin.tween_property(die, "rotation:x", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 			spin.tween_property(die, "rotation:y", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 	for i in range(players.size()):
 		var player: Dictionary = players[i]
@@ -775,10 +803,17 @@ func update_state() -> void:
 				pawn_tweens[player.id].kill()
 			var movement := create_tween()
 			pawn_tweens[player.id] = movement
+			var previous: Vector3 = pawn.position
 			for square in path:
-				movement.tween_property(pawn, "position", tile_position(int(square)) + offset, 0.18).set_trans(Tween.TRANS_SINE)
+				var destination: Vector3 = tile_position(int(square)) + offset
+				movement.tween_method(animate_pawn_hop.bind(pawn, previous, destination), 0.0, 1.0, 0.2)
+				previous = destination
 		elif is_new or not pawn_tweens.has(player.id) or not pawn_tweens[player.id].is_running():
 			pawn.position = tile_position(int(player.pos)) + offset
+	var can_roll: bool = phase in ["opening", "playing"] and str(current.get("id", "")) == me and not mine.get("out", false) and not mine.get("autoPlay", false) and state.get("auction") == null and state.get("offer") == null and state.get("debts", []).is_empty()
+	if phase == "playing" and state.get("rolled", false):
+		can_roll = false
+	roll_button.visible = can_roll
 	show_victory(phase, current, players, tiles, me, round_number)
 	var turn_key := phase + ":" + str(current.get("id", "")) + ":" + str(round_number)
 	if not last_turn_key.is_empty() and turn_key != last_turn_key and phase == "playing" and str(current.get("id", "")) == me and not mine.get("autoPlay", false) and sound_enabled:
@@ -1024,6 +1059,7 @@ func leave_session() -> void:
 	api.session = {}
 	state = {}
 	set_board_focus(false)
+	roll_button.visible = false
 	action_key = ""
 	session_view.visible = true
 	action_scroll.visible = false
