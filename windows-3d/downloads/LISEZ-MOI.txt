@@ -1,0 +1,16 @@
+QUARTIERS MAROC 3D — PROTOTYPE WINDOWS
+
+1. Extrais tous les fichiers de cette archive.
+2. Ouvre Quartiers-Maroc-3D-prototype.exe.
+3. Connecte-toi à Internet, choisis ton prénom et crée ou rejoins un salon.
+4. Caméra : flèches du clavier, clic droit et mouvement de souris, molette.
+
+Le serveur configuré est celui du site web et de l’APK. Les fonctions principales
+sont en cours de test. Le programme est un prototype : les monuments des villes,
+les cartes, plusieurs animations et la validation sur un PC Windows réel restent
+à faire. Utilise de préférence un salon de test.
+
+Pour revenir à l’accueil, utilise le bouton prévu : un robot prend le relais et
+la session peut être reprise sur le même ordinateur.
+
+Logiciel créé avec Godot Engine. Sa licence est fournie dans GODOT-LICENSE.txt.

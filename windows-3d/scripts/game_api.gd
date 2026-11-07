@@ -8,7 +8,7 @@ var session: Dictionary = {}
 func _request(method: int, path: String, data: Dictionary = {}) -> Dictionary:
 	var request := HTTPRequest.new()
 	add_child(request)
-	request.timeout = 12.0
+	request.timeout = 75.0 if path in ["/api/health", "/api/create", "/api/join"] else 12.0
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var body := JSON.stringify(data) if method == HTTPClient.METHOD_POST else ""
 	var err := request.request(server.trim_suffix("/") + path, headers, method, body)

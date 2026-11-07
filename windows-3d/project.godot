@@ -2,5 +2,11 @@
 config_version=5
 [application]
 config/name="Quartiers Maroc 3D"
+run/main_scene="res://scenes/main.tscn"
 [rendering]
 renderer/rendering_method="gl_compatibility"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/stretch/mode="canvas_items"

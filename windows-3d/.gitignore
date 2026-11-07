@@ -1,0 +1,4 @@
+.godot/
+dist/
+*.gd.uid
+downloads/*.import
