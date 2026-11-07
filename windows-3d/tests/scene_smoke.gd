@@ -29,6 +29,10 @@ func run() -> void:
 		if load("res://assets/kenney/" + asset) == null:
 			fail("modèle 3D manquant : " + asset)
 			return
+	for asset in ["voiture", "bateau", "monsieur", "de"]:
+		if load("res://assets/user_models/" + asset + ".glb") == null:
+			fail("modèle fourni manquant : " + asset)
+			return
 	if scene.labels.size() != 40:
 		fail("les 40 cases")
 		return
@@ -84,15 +88,23 @@ func run() -> void:
 	scene.state = snapshot.data
 	scene.update_state()
 	await process_frame
-	if not scene.focused_board or not scene.focus_overlay.visible or scene.view_distance != 7.8:
-		fail("plateau agrandi et décor flou au démarrage")
+	if not scene.focused_board or scene.focus_overlay.visible or scene.view_distance != 7.8:
+		fail("plateau agrandi en mode performance")
 		return
 	await process_frame
+	if not is_equal_approx(root.scaling_3d_scale, 0.75) or scene.labels[20].visible:
+		fail("optimisations du plateau rapproché")
+		return
+	scene.quality_control.button_pressed = true
+	if not scene.focus_overlay.visible or not is_equal_approx(root.scaling_3d_scale, 1.0):
+		fail("activation du flou facultatif")
+		return
+	scene.quality_control.button_pressed = false
 	if not scene.map_button.visible or scene.map_button.text != "Voir tout le plateau" or not scene.follow_anchor_valid:
 		fail("caméra qui suit le pion")
 		return
 	scene.map_button.pressed.emit()
-	if not scene.map_overview or scene.view_distance != 14.7 or scene.map_button.text != "Suivre mon pion":
+	if not scene.map_overview or scene.view_distance != 14.7 or scene.map_button.text != "Suivre mon pion" or not scene.labels[20].visible:
 		fail("bouton pour voir tout le plateau")
 		return
 	scene.map_button.pressed.emit()

@@ -6,7 +6,9 @@ Plateau 3D inspiré des images de référence, avec les villes marocaines
 3. Connecte-toi à Internet, choisis ton prénom et crée ou rejoins un salon.
 4. Caméra : flèches du clavier, clic droit et mouvement de souris, molette.
 5. Clique sur une case pour afficher son nom et son prix en grand.
-Au début de la partie, la caméra suit ton pion et le décor devient flou.
+Le mode léger est actif au démarrage ; le nombre de FPS est indiqué à droite.
+« Décor flou » améliore le décor mais peut réduire la fluidité.
+Au début de la partie, la caméra suit ton pion ; le flou est facultatif.
 Utilise « Voir tout le plateau » pour afficher la carte complète, puis
 « Suivre mon pion » pour revenir à la vue rapprochée.
 À ton tour, utilise le grand bouton pour lancer les dés.
@@ -23,3 +25,6 @@ Les modèles de la ville proviennent notamment de Kenney (CC0) ; leur attributio
 figure dans KENNEY-ATTRIBUTION.txt.
 
 Logiciel créé avec Godot Engine. Sa licence est fournie dans GODOT-LICENSE.txt.
+
+Les pions voiture, bateau et personnage viennent des modèles fournis par le
+joueur. Le dé adapté est crédité dans DE-LICENSE.txt.

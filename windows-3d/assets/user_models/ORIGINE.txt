@@ -1,0 +1,5 @@
+Modèles fournis par l'utilisateur : monopoly-car.zip, monopoly-ship.zip,
+monopoly-guy.zip et dice.zip. Ils ont été convertis au format GLB,
+redimensionnés et, pour certains, simplifiés pour la fluidité du jeu.
+Le modèle de dé est attribué dans DE-LICENSE.txt. Les autres archives ne
+contenaient pas de fichier de licence ni d'indication de provenance.

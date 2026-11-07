@@ -55,6 +55,11 @@ var focused_board := false
 var focus_overlay: ColorRect
 var map_button: Button
 var roll_button: Button
+var quality_blur := false
+var quality_control: CheckButton
+var fps_label: Label
+var fps_clock := 0.0
+var last_label_region := -1
 var map_overview := false
 var follow_anchor := Vector3.ZERO
 var follow_anchor_valid := false
@@ -145,6 +150,10 @@ func tile_rotation(index: int) -> float:
 
 # Wrap long names onto the card; keep the full spelling and the price.
 func set_tile_text(label: Label3D, tile_name: String, price: int) -> void:
+	var cache_key := tile_name + "|" + str(price)
+	if label.get_meta("tile_text_key", "") == cache_key:
+		return
+	label.set_meta("tile_text_key", cache_key)
 	var lines: Array[String] = []
 	var line := ""
 	for word in tile_name.split(" ", false):
@@ -190,6 +199,31 @@ func board_symbol(text: String, pos: Vector3, index: int, color: Color) -> void:
 	symbol.rotate_y(tile_rotation(index))
 	add_child(symbol)
 
+# One draw call per tile shape instead of one for every individual square.
+func build_tile_surfaces() -> void:
+	for group in ["horizontal", "vertical", "corner", "jail"]:
+		var indices: Array[int] = []
+		for i in range(40):
+			var corner := i % 10 == 0
+			var side := (i > 10 and i < 20) or i > 30
+			if (group == "jail" and i == 10) or (group == "corner" and corner and i != 10) or (group == "horizontal" and not corner and not side) or (group == "vertical" and not corner and side):
+				indices.append(i)
+		var size := Vector3(1.20, 0.10, 1.20) if group in ["corner", "jail"] else (Vector3(1.20, 0.10, 0.96) if group == "vertical" else Vector3(0.96, 0.10, 1.20))
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		var tile_material := material(Color("efbc74") if group == "jail" else Color("dce9d3"))
+		tile_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mesh.material = tile_material
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh
+		multi.instance_count = indices.size()
+		for n in range(indices.size()):
+			multi.set_instance_transform(n, Transform3D(Basis.IDENTITY, tile_position(indices[n])))
+		var node := MultiMeshInstance3D.new()
+		node.multimesh = multi
+		add_child(node)
+
 func build_world() -> void:
 	var env := WorldEnvironment.new()
 	var sky_env := Environment.new()
@@ -204,19 +238,16 @@ func build_world() -> void:
 	light.rotation_degrees = Vector3(-58, -28, 0)
 	light.light_color = Color("fff1d1")
 	light.light_energy = 0.72
-	light.shadow_enabled = true
+	light.shadow_enabled = false
 	add_child(light)
-	build_city()
+	build_lightweight_city()
 	# The playing surface is a ring of rectangular cards and larger corner cards.
 	board_box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("294032"))
 	board_box(self, Vector3(11.7, 0.22, 11.7), Vector3(0, -0.22, 0), Color("263b2e"))
 	board_box(self, Vector3(8.95, 0.10, 8.95), Vector3(0, -0.04, 0), Color("cfe1c6"))
+	build_tile_surfaces()
 	for i in range(40):
 		var pos := tile_position(i)
-		var corner := i % 10 == 0
-		var side := (i > 10 and i < 20) or i > 30
-		var dimensions := Vector3(1.20, 0.10, 1.20) if corner else (Vector3(1.20, 0.10, 0.96) if side else Vector3(0.96, 0.10, 1.20))
-		board_box(self, dimensions, pos, Color("efbc74") if i == 10 else Color("dce9d3"))
 		var group_color := Color("9d977b")
 		for group_index in range(PROPERTY_GROUPS.size()):
 			if i in PROPERTY_GROUPS[group_index]:
@@ -269,7 +300,13 @@ func build_world() -> void:
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
 		add_child(die)
-		box(die, Vector3(0.58, 0.58, 0.58), Vector3.ZERO, Color("fff7e7"))
+		var die_model: PackedScene = load("res://assets/user_models/de.glb")
+		if die_model != null:
+			var shape := die_model.instantiate() as Node3D
+			shape.scale = Vector3.ONE * 0.58
+			die.add_child(shape)
+		else:
+			box(die, Vector3(0.58, 0.58, 0.58), Vector3.ZERO, Color("fff7e7"))
 		var face := Label3D.new()
 		face.text = "–"
 		face.position = Vector3(0, 0.30, 0)
@@ -304,6 +341,21 @@ func build_world() -> void:
 	add_child(camera)
 	build_focus_overlay()
 	update_camera()
+
+# A compact background keeps the board readable on slower PCs.
+func build_lightweight_city() -> void:
+	box(self, Vector3(40, 0.3, 40), Vector3(0, -1.22, 0), Color("a1b0a9"))
+	for side in [-1, 1]:
+		box(self, Vector3(40, 0.07, 2.8), Vector3(0, -1.02, side * 9.0), Color("6f7774"))
+		box(self, Vector3(2.8, 0.07, 40), Vector3(side * 9.0, -1.01, 0), Color("6f7774"))
+		box(self, Vector3(40, 0.11, 0.65), Vector3(0, -0.98, side * 7.3), Color("d3d9d2"))
+		box(self, Vector3(0.65, 0.11, 40), Vector3(side * 7.3, -0.97, 0), Color("d3d9d2"))
+		for n in [-6, 0, 6]:
+			make_tree(Vector3(n, -0.9, side * 7.0), n + side)
+			make_tree(Vector3(side * 7.0, -0.9, n), n - side)
+		for n in [-9, 9]:
+			box(self, Vector3(2.5, 2.7, 2.5), Vector3(n, 0.45, side * 13.0), Color("b9c7bd"))
+			box(self, Vector3(2.6, 0.25, 2.6), Vector3(n, 1.9, side * 13.0), Color("668b89"))
 
 # A stylised city surrounds the shared board; these are not landmark replicas.
 func build_city() -> void:
@@ -443,8 +495,11 @@ func set_board_focus(enabled: bool) -> void:
 	focused_board = enabled
 	map_overview = false
 	follow_anchor_valid = false
+	last_label_region = -1
+	if not enabled:
+		show_nearby_labels(-1)
 	view_distance = 7.8 if enabled else 18.5
-	focus_overlay.visible = enabled
+	focus_overlay.visible = enabled and quality_blur
 	if map_button != null:
 		map_button.visible = enabled
 		map_button.text = "Voir tout le plateau"
@@ -456,10 +511,17 @@ func toggle_map_view() -> void:
 	map_overview = not map_overview
 	view_distance = 14.7 if map_overview else 7.8
 	follow_anchor_valid = false
+	last_label_region = -1
+	if map_overview:
+		show_nearby_labels(-1)
 	map_button.text = "Suivre mon pion" if map_overview else "Voir tout le plateau"
 	update_camera()
 
 func _process(delta: float) -> void:
+	fps_clock += delta
+	if fps_label != null and fps_clock >= 0.5:
+		fps_label.text = "Fluidité : " + str(Engine.get_frames_per_second()) + " FPS"
+		fps_clock = 0.0
 	if not focused_board or map_overview or camera == null:
 		return
 	var my_id := str(state.get("me", ""))
@@ -473,6 +535,9 @@ func _process(delta: float) -> void:
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest = i
+	if nearest != last_label_region:
+		show_nearby_labels(nearest)
+		last_label_region = nearest
 	var back := tile_position(nearest) - tile_position((nearest + 1) % 40)
 	var desired_angle := atan2(back.x, back.z)
 	if not follow_anchor_valid:
@@ -485,17 +550,22 @@ func _process(delta: float) -> void:
 		follow_angle = lerp_angle(follow_angle, desired_angle, weight)
 	update_camera()
 
+func show_nearby_labels(index: int) -> void:
+	for i in range(labels.size()):
+		var distance := absi(i - index)
+		labels[i].visible = index < 0 or mini(distance, 40 - distance) <= 7
+
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
 	var following := focused_board and not map_overview and follow_anchor_valid
-	var angle := follow_angle + follow_orbit_offset if following else view_angle
+	var angle := follow_angle + follow_orbit_offset + PI / 4 if following else view_angle
 	var target := follow_anchor if following else Vector3.ZERO
 	target.y = 0.0
 	# Shift the board into the space left of the controls.
 	target += Vector3(cos(angle), 0, -sin(angle)) * (view_distance * 0.08)
 	camera.position = target + Vector3(sin(angle) * view_distance, max(4.0, view_distance * view_elevation), cos(angle) * view_distance)
 	camera.look_at(target, Vector3.UP)
-	if focus_overlay != null:
+	if focus_overlay != null and focus_overlay.visible:
 		var viewport_size := get_viewport().get_visible_rect().size
 		if viewport_size.x > 0 and viewport_size.y > 0:
 			var shader_material := focus_overlay.material as ShaderMaterial
@@ -611,6 +681,19 @@ func build_ui() -> void:
 	note.text = "Prototype : monuments et commandes incomplets.\nCaméra : flèches ou clic droit, molette."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(note)
+	fps_label = Label.new()
+	fps_label.text = "Fluidité : mesure en cours"
+	content.add_child(fps_label)
+	quality_control = CheckButton.new()
+	quality_control.text = "Décor flou (plus lent)"
+	quality_control.button_pressed = false
+	quality_control.toggled.connect(func(enabled: bool):
+		quality_blur = enabled
+		focus_overlay.visible = focused_board and enabled
+		get_viewport().scaling_3d_scale = 1.0 if enabled else 0.75
+		update_camera())
+	content.add_child(quality_control)
+	get_viewport().scaling_3d_scale = 0.75
 	tile_details = Label.new()
 	tile_details.text = "Clique sur une case pour la lire"
 	tile_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -765,9 +848,18 @@ func update_state() -> void:
 		for pip in range(dice_pips[i].size()):
 			dice_pips[i][pip].visible = pip in patterns[value - 1]
 	if new_events.any(func(event): return event.get("type", "") == "dice"):
-		for die in dice_nodes:
+		var throw_from := tile_position(int(current.get("pos", 0)))
+		if pawns.has(str(current.get("id", ""))):
+			throw_from = pawns[str(current.id)].position
+		var inward := Vector3(-throw_from.x, 0, -throw_from.z).normalized()
+		var across := Vector3(-inward.z, 0, inward.x)
+		for i in range(dice_nodes.size()):
+			var die := dice_nodes[i]
+			var destination := Vector3(throw_from.x, 0.35, throw_from.z) + inward * 1.15 + across * (i - 0.5) * 0.72
+			die.position = Vector3(throw_from.x, 1.3, throw_from.z) - inward * 0.4
 			die.rotation = Vector3.ZERO
 			var spin := create_tween().set_parallel(true)
+			spin.tween_property(die, "position", destination, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			spin.tween_property(die, "rotation:x", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 			spin.tween_property(die, "rotation:y", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 	for i in range(players.size()):
@@ -782,12 +874,13 @@ func update_state() -> void:
 		var is_new: bool = not pawns.has(player.id)
 		if is_new:
 			pawn = cylinder(self, 0.19, 0.12, Vector3.ZERO, COLORS[i % COLORS.size()])
-			var characters := ["male-a", "female-a", "male-b", "female-b"]
-			var prefab: PackedScene = load("res://assets/kenney/mini-characters/character-" + characters[i % characters.size()] + ".glb")
+			# Fixed order is the same for every PC client in the room.
+			var token_models := ["voiture", "bateau", "monsieur", "voiture", "bateau", "monsieur"]
+			var prefab: PackedScene = load("res://assets/user_models/" + token_models[i % token_models.size()] + ".glb")
 			if prefab != null:
 				var figure := prefab.instantiate() as Node3D
-				figure.position.y = 0.06
-				figure.scale = Vector3.ONE * 0.9
+				figure.position.y = 0.08
+				figure.scale = Vector3.ONE * 0.65
 				pawn.add_child(figure)
 			pawns[player.id] = pawn
 		else:
