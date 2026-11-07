@@ -1,0 +1,7 @@
+Modèle « Monopoly » par Anthony Yanez (paulyanez), adapté : seuls le plateau,
+les cartes Chance et Caisse commune sont conservés, et des cases et noms du
+jeu Quartiers Maroc sont superposés.
+Source : https://sketchfab.com/3d-models/monopoly-2f0ff1f2cd184f2d8fd3215b5d339199
+Auteur : https://sketchfab.com/paulyanez
+Licence : Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/

@@ -1,12 +1,12 @@
 QUARTIERS MAROC 3D — PROTOTYPE WINDOWS
-Plateau 3D inspiré des images de référence, avec les villes marocaines
+Plateau 3D fourni, adapté aux villes marocaines
 
 1. Extrais tous les fichiers de cette archive.
 2. Ouvre Quartiers-Maroc-3D-prototype.exe.
 3. Connecte-toi à Internet, choisis ton prénom et crée ou rejoins un salon.
 4. Caméra : flèches du clavier, clic droit et mouvement de souris, molette.
 5. Clique sur une case pour afficher son nom et son prix en grand.
-Le mode léger est actif au démarrage ; le nombre de FPS est indiqué à droite.
+Le nombre de FPS est indiqué à droite. Active « Mode performance » si nécessaire.
 « Décor flou » améliore le décor mais peut réduire la fluidité.
 Au début de la partie, la caméra suit ton pion ; le flou est facultatif.
 Utilise « Voir tout le plateau » pour afficher la carte complète, puis
@@ -27,4 +27,4 @@ figure dans KENNEY-ATTRIBUTION.txt.
 Logiciel créé avec Godot Engine. Sa licence est fournie dans GODOT-LICENSE.txt.
 
 Les pions voiture, bateau et personnage viennent des modèles fournis par le
-joueur. Le dé adapté est crédité dans DE-LICENSE.txt.
+joueur. Le dé adapté est crédité dans DE-LICENSE.txt ; le plateau est crédité dans PLATEAU-LICENSE.txt.

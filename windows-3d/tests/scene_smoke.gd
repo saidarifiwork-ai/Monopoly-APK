@@ -29,7 +29,7 @@ func run() -> void:
 		if load("res://assets/kenney/" + asset) == null:
 			fail("modèle 3D manquant : " + asset)
 			return
-	for asset in ["voiture", "bateau", "monsieur", "de"]:
+	for asset in ["voiture", "bateau", "monsieur", "de", "plateau-original"]:
 		if load("res://assets/user_models/" + asset + ".glb") == null:
 			fail("modèle fourni manquant : " + asset)
 			return
@@ -39,6 +39,14 @@ func run() -> void:
 	if not scene.labels[1].text.contains("60 DH") or not scene.tile_colors[1].visible or scene.tile_colors[2].visible:
 		fail("prix et couleurs des cases")
 		return
+	if scene.get_node_or_null("Plateau3DImporte") == null:
+		fail("plateau 3D fourni non affiché")
+		return
+	for i in range(40):
+		scene.inspect_tile(scene.camera.unproject_position(scene.tile_position(i) + Vector3(0, 0.05, 0)))
+		if scene.tile_details.text != scene.labels[i].text.replace("\n", " "):
+			fail("case mal alignée : " + str(i))
+			return
 	# Clicking a card exposes its full name and price in large UI text.
 	scene.inspect_tile(scene.camera.unproject_position(scene.tile_position(1) + Vector3(0, 0.05, 0)))
 	if not scene.tile_details.text.contains("Chefchaouen") or not scene.tile_details.text.contains("60 DH"):
@@ -92,11 +100,11 @@ func run() -> void:
 		fail("plateau agrandi en mode performance")
 		return
 	await process_frame
-	if not is_equal_approx(root.scaling_3d_scale, 0.75) or scene.labels[20].visible:
+	if not is_equal_approx(root.scaling_3d_scale, 0.85) or scene.labels[20].visible:
 		fail("optimisations du plateau rapproché")
 		return
 	scene.quality_control.button_pressed = true
-	if not scene.focus_overlay.visible or not is_equal_approx(root.scaling_3d_scale, 1.0):
+	if not scene.focus_overlay.visible or not is_equal_approx(root.scaling_3d_scale, 0.85):
 		fail("activation du flou facultatif")
 		return
 	scene.quality_control.button_pressed = false

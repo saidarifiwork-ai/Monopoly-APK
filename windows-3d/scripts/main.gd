@@ -123,21 +123,25 @@ func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, color:
 	return node
 
 func tile_position(index: int) -> Vector3:
+	# Match the dimensions of the imported board: wide corner squares and 9 cards.
+	var corner := 5.105
+	var first := 3.787
+	var step := 0.9467
 	if index == 0:
-		return Vector3(5.12, 0, 5.12)
+		return Vector3(corner, 0, corner)
 	if index < 10:
-		return Vector3(5.0 - index, 0, 5.12)
+		return Vector3(first - (index - 1) * step, 0, corner)
 	if index == 10:
-		return Vector3(-5.12, 0, 5.12)
+		return Vector3(-corner, 0, corner)
 	if index < 20:
-		return Vector3(-5.12, 0, 5.0 - (index - 10))
+		return Vector3(-corner, 0, first - (index - 11) * step)
 	if index == 20:
-		return Vector3(-5.12, 0, -5.12)
+		return Vector3(-corner, 0, -corner)
 	if index < 30:
-		return Vector3(-5.0 + index - 20, 0, -5.12)
+		return Vector3(-first + (index - 21) * step, 0, -corner)
 	if index == 30:
-		return Vector3(5.12, 0, -5.12)
-	return Vector3(5.12, 0, -5.0 + index - 30)
+		return Vector3(corner, 0, -corner)
+	return Vector3(corner, 0, -first + (index - 31) * step)
 
 func tile_rotation(index: int) -> float:
 	if index > 10 and index < 20:
@@ -208,21 +212,25 @@ func build_tile_surfaces() -> void:
 			var side := (i > 10 and i < 20) or i > 30
 			if (group == "jail" and i == 10) or (group == "corner" and corner and i != 10) or (group == "horizontal" and not corner and not side) or (group == "vertical" and not corner and side):
 				indices.append(i)
-		var size := Vector3(1.20, 0.10, 1.20) if group in ["corner", "jail"] else (Vector3(1.20, 0.10, 0.96) if group == "vertical" else Vector3(0.96, 0.10, 1.20))
-		var mesh := BoxMesh.new()
-		mesh.size = size
-		var tile_material := material(Color("efbc74") if group == "jail" else Color("dce9d3"))
-		tile_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mesh.material = tile_material
-		var multi := MultiMesh.new()
-		multi.transform_format = MultiMesh.TRANSFORM_3D
-		multi.mesh = mesh
-		multi.instance_count = indices.size()
-		for n in range(indices.size()):
-			multi.set_instance_transform(n, Transform3D(Basis.IDENTITY, tile_position(indices[n])))
-		var node := MultiMeshInstance3D.new()
-		node.multimesh = multi
-		add_child(node)
+		var size := Vector3(1.68, 0.10, 1.68) if group in ["corner", "jail"] else (Vector3(1.68, 0.10, 0.94) if group == "vertical" else Vector3(0.94, 0.10, 1.68))
+		# A dark backing and a slightly smaller face give every square a clear edge.
+		for border in [true, false]:
+			var mesh := BoxMesh.new()
+			mesh.size = size if border else size - Vector3(0.025, 0, 0.025)
+			var tile_color := Color("263b2e") if border else (Color("efbc74") if group == "jail" else Color("dce9d3"))
+			var tile_material := material(tile_color)
+			tile_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mesh.material = tile_material
+			var multi := MultiMesh.new()
+			multi.transform_format = MultiMesh.TRANSFORM_3D
+			multi.mesh = mesh
+			multi.instance_count = indices.size()
+			for n in range(indices.size()):
+				var pos := tile_position(indices[n]) + Vector3(0, 0 if border else 0.011, 0)
+				multi.set_instance_transform(n, Transform3D(Basis.IDENTITY, pos))
+			var node := MultiMeshInstance3D.new()
+			node.multimesh = multi
+			add_child(node)
 
 func build_world() -> void:
 	var env := WorldEnvironment.new()
@@ -244,7 +252,13 @@ func build_world() -> void:
 	# The playing surface is a ring of rectangular cards and larger corner cards.
 	board_box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("294032"))
 	board_box(self, Vector3(11.7, 0.22, 11.7), Vector3(0, -0.22, 0), Color("263b2e"))
-	board_box(self, Vector3(8.95, 0.10, 8.95), Vector3(0, -0.04, 0), Color("cfe1c6"))
+	var board_scene: PackedScene = load("res://assets/user_models/plateau-original.glb")
+	if board_scene != null:
+		var imported_board := board_scene.instantiate() as Node3D
+		imported_board.name = "Plateau3DImporte"
+		imported_board.position.y = 0.0
+		add_child(imported_board)
+		make_unshaded(imported_board)
 	build_tile_surfaces()
 	for i in range(40):
 		var pos := tile_position(i)
@@ -253,7 +267,7 @@ func build_world() -> void:
 			if i in PROPERTY_GROUPS[group_index]:
 				group_color = GROUP_COLORS[group_index]
 				break
-		var band_offset := Vector3(0, 0.09, -0.49).rotated(Vector3.UP, tile_rotation(i))
+		var band_offset := Vector3(0, 0.09, -0.70).rotated(Vector3.UP, tile_rotation(i))
 		var band := board_box(self, Vector3(0.88, 0.06, 0.16), pos + band_offset, group_color)
 		band.rotation.y = tile_rotation(i)
 		band.visible = i in CITY_TILES
@@ -278,24 +292,6 @@ func build_world() -> void:
 			board_symbol("➜", pos, i, Color("dc4836"))
 		elif i in [10, 20, 30]:
 			board_symbol("★", pos, i, Color("de8c28"))
-	# Coloured corners of the centre carry the two familiar card piles.
-	board_box(self, Vector3(1.28, 0.06, 0.96), Vector3(-2.65, 0.08, -2.65), Color("fff8e7"))
-	board_box(self, Vector3(1.1, 0.34, 0.75), Vector3(-2.65, 0.28, -2.65), Color("78b8d0"))
-	board_box(self, Vector3(1.17, 0.09, 0.82), Vector3(-2.65, 0.49, -2.65), Color("eff9f4"))
-	board_box(self, Vector3(0.9, 0.04, 0.50), Vector3(-2.65, 0.55, -2.65), Color("55adca"))
-	board_box(self, Vector3(1.28, 0.07, 0.96), Vector3(2.65, 0.09, 2.65), Color("fff8e7"))
-	board_box(self, Vector3(1.12, 0.07, 0.80), Vector3(2.65, 0.16, 2.65), Color("e6a14b"))
-	var question := Label3D.new()
-	question.text = "?"
-	question.position = Vector3(2.65, 0.21, 2.65)
-	question.rotation.x = -PI / 2
-	question.font_size = 100
-	question.pixel_size = 0.005
-	question.outline_size = 0
-	add_child(question)
-	board_box(self, Vector3(5.9, 0.05, 1.45), Vector3(0, 0.04, 0), Color("e9bb79"))
-	board_box(self, Vector3(5.55, 0.06, 1.17), Vector3(0, 0.10, 0), Color("fff9e7"))
-	board_box(self, Vector3(5.28, 0.06, 0.94), Vector3(0, 0.14, 0), Color("be322e"))
 	for i in range(2):
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
@@ -326,15 +322,6 @@ func build_world() -> void:
 		dice_pips.append(dots)
 		dice_nodes.append(die)
 		dice_labels.append(face)
-	var title := Label3D.new()
-	title.text = "QUARTIERS"
-	title.position = Vector3(0, 0.19, 0)
-	title.rotation.x = -PI / 2
-	title.font_size = 100
-	title.pixel_size = 0.0056
-	title.modulate = Color("fffdf4")
-	title.outline_size = 0
-	add_child(title)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 20.0
@@ -420,6 +407,17 @@ func make_building(pos: Vector3, variant: int, reverse: bool) -> void:
 	var pastel := [Color("e9c1a6"), Color("e5b0a1"), Color("f4dfbf"), Color("a5cfc5"), Color("eacba7")]
 	if model != null:
 		tint_model(model, pastel[absi(variant) % pastel.size()])
+
+func make_unshaded(node: Node) -> void:
+	if node is MeshInstance3D and node.mesh != null:
+		for surface in range(node.mesh.get_surface_count()):
+			var source: Material = node.get_active_material(surface)
+			if source is BaseMaterial3D:
+				var clean := source.duplicate() as BaseMaterial3D
+				clean.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				node.set_surface_override_material(surface, clean)
+	for child in node.get_children():
+		make_unshaded(child)
 
 func tint_model(node: Node, tint: Color) -> void:
 	if node is MeshInstance3D and node.mesh != null:
@@ -666,6 +664,14 @@ func build_ui() -> void:
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.position = Vector2(-370, 18)
 	panel.size = Vector2(350, 0)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color("203a31eF")
+	panel_style.border_color = Color("e6d4a0")
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(12)
+	panel_style.shadow_color = Color("00000055")
+	panel_style.shadow_size = 8
+	panel.add_theme_stylebox_override("panel", panel_style)
 	layer.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
@@ -678,7 +684,7 @@ func build_ui() -> void:
 	heading.add_theme_font_size_override("font_size", 20)
 	content.add_child(heading)
 	var note := Label.new()
-	note.text = "Prototype : monuments et commandes incomplets.\nCaméra : flèches ou clic droit, molette."
+	note.text = "Caméra : flèches ou clic droit · zoom : molette"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(note)
 	fps_label = Label.new()
@@ -690,10 +696,15 @@ func build_ui() -> void:
 	quality_control.toggled.connect(func(enabled: bool):
 		quality_blur = enabled
 		focus_overlay.visible = focused_board and enabled
-		get_viewport().scaling_3d_scale = 1.0 if enabled else 0.75
 		update_camera())
 	content.add_child(quality_control)
-	get_viewport().scaling_3d_scale = 0.75
+	var performance := CheckButton.new()
+	performance.text = "Mode performance"
+	performance.button_pressed = false
+	performance.toggled.connect(func(enabled: bool):
+		get_viewport().scaling_3d_scale = 0.75 if enabled else 0.85)
+	content.add_child(performance)
+	get_viewport().scaling_3d_scale = 0.85
 	tile_details = Label.new()
 	tile_details.text = "Clique sur une case pour la lire"
 	tile_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
