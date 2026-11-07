@@ -77,8 +77,22 @@ func run() -> void:
 	scene.state = snapshot.data
 	scene.update_state()
 	await process_frame
-	if not scene.focused_board or not scene.focus_overlay.visible or scene.view_distance != 14.7:
+	if not scene.focused_board or not scene.focus_overlay.visible or scene.view_distance != 7.8:
 		fail("plateau agrandi et décor flou au démarrage")
+		return
+	await process_frame
+	if not scene.map_button.visible or scene.map_button.text != "Voir tout le plateau" or not scene.follow_anchor_valid:
+		fail("caméra qui suit le pion")
+		return
+	scene.map_button.pressed.emit()
+	if not scene.map_overview or scene.view_distance != 14.7 or scene.map_button.text != "Suivre mon pion":
+		fail("bouton pour voir tout le plateau")
+		return
+	scene.map_button.pressed.emit()
+	await process_frame
+	await process_frame
+	if scene.map_overview or scene.view_distance != 7.8 or not scene.follow_anchor_valid:
+		fail("retour au suivi du pion")
 		return
 	scene.view_distance = 13.0
 	scene.update_state()
@@ -117,6 +131,9 @@ func run() -> void:
 	scene.update_state()
 	await create_timer(0.6).timeout
 	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.12, 0)
+	if scene.follow_anchor.distance_to(expected) > 0.6:
+		fail("la caméra suit le pion en déplacement")
+		return
 	if scene.pawns[sample.players[0].id].position.distance_to(expected) > 0.02 or scene.dice_labels[0].text != "6" or scene.dice_labels[1].text != "2":
 		fail("dés et chemin animé du pion")
 		return

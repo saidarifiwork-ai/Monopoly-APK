@@ -53,6 +53,12 @@ var view_elevation := 0.9
 var view_distance := 18.5
 var focused_board := false
 var focus_overlay: ColorRect
+var map_button: Button
+var map_overview := false
+var follow_anchor := Vector3.ZERO
+var follow_anchor_valid := false
+var follow_angle := 0.65
+var follow_orbit_offset := 0.0
 var session_file := "user://quartiers-session.cfg"
 var saved_session: Dictionary = {}
 var saved_server := ""
@@ -434,14 +440,59 @@ func set_board_focus(enabled: bool) -> void:
 	if focused_board == enabled:
 		return
 	focused_board = enabled
-	view_distance = 14.7 if enabled else 18.5
+	map_overview = false
+	follow_anchor_valid = false
+	view_distance = 7.8 if enabled else 18.5
 	focus_overlay.visible = enabled
+	if map_button != null:
+		map_button.visible = enabled
+		map_button.text = "Voir tout le plateau"
+	update_camera()
+
+func toggle_map_view() -> void:
+	if not focused_board:
+		return
+	map_overview = not map_overview
+	view_distance = 14.7 if map_overview else 7.8
+	follow_anchor_valid = false
+	map_button.text = "Suivre mon pion" if map_overview else "Voir tout le plateau"
+	update_camera()
+
+func _process(delta: float) -> void:
+	if not focused_board or map_overview or camera == null:
+		return
+	var my_id := str(state.get("me", ""))
+	if not pawns.has(my_id) or not is_instance_valid(pawns[my_id]):
+		return
+	var position: Vector3 = pawns[my_id].position
+	var nearest := 0
+	var nearest_distance := INF
+	for i in range(40):
+		var distance := Vector2(position.x - tile_position(i).x, position.z - tile_position(i).z).length_squared()
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest = i
+	var back := tile_position(nearest) - tile_position((nearest + 1) % 40)
+	var desired_angle := atan2(back.x, back.z)
+	if not follow_anchor_valid:
+		follow_anchor = position
+		follow_angle = desired_angle
+		follow_anchor_valid = true
+	else:
+		var weight := 1.0 - exp(-8.0 * delta)
+		follow_anchor = follow_anchor.lerp(position, weight)
+		follow_angle = lerp_angle(follow_angle, desired_angle, weight)
 	update_camera()
 
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
-	var target := Vector3(cos(view_angle), 0, -sin(view_angle)) * 1.5
-	camera.position = target + Vector3(sin(view_angle) * view_distance, max(6.0, view_distance * view_elevation), cos(view_angle) * view_distance)
+	var following := focused_board and not map_overview and follow_anchor_valid
+	var angle := follow_angle + follow_orbit_offset if following else view_angle
+	var target := follow_anchor if following else Vector3.ZERO
+	target.y = 0.0
+	# Shift the board into the space left of the controls.
+	target += Vector3(cos(angle), 0, -sin(angle)) * (view_distance * 0.08)
+	camera.position = target + Vector3(sin(angle) * view_distance, max(4.0, view_distance * view_elevation), cos(angle) * view_distance)
 	camera.look_at(target, Vector3.UP)
 	if focus_overlay != null:
 		var viewport_size := get_viewport().get_visible_rect().size
@@ -454,9 +505,15 @@ func update_camera() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_LEFT:
-			view_angle -= 0.12
+			if focused_board and not map_overview:
+				follow_orbit_offset -= 0.12
+			else:
+				view_angle -= 0.12
 		elif event.keycode == KEY_RIGHT:
-			view_angle += 0.12
+			if focused_board and not map_overview:
+				follow_orbit_offset += 0.12
+			else:
+				view_angle += 0.12
 		elif event.keycode == KEY_UP:
 			view_elevation = min(1.6, view_elevation + 0.1)
 		elif event.keycode == KEY_DOWN:
@@ -465,7 +522,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		update_camera()
 	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_RIGHT) != 0:
-		view_angle -= event.relative.x * 0.006
+		if focused_board and not map_overview:
+			follow_orbit_offset -= event.relative.x * 0.006
+		else:
+			view_angle -= event.relative.x * 0.006
 		view_elevation = clamp(view_elevation + event.relative.y * 0.004, 0.55, 1.6)
 		update_camera()
 	elif event is InputEventMouseButton and event.pressed:
@@ -473,7 +533,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			inspect_tile(event.position)
 			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			view_distance = max(10.0, view_distance - 1.0)
+			view_distance = max(5.0, view_distance - 1.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			view_distance = min(25.0, view_distance + 1.0)
 		else:
@@ -533,6 +593,8 @@ func build_ui() -> void:
 	tile_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tile_details.add_theme_font_size_override("font_size", 20)
 	content.add_child(tile_details)
+	map_button = add_button(content, "Voir tout le plateau", toggle_map_view)
+	map_button.visible = false
 	status = Label.new()
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.text = "Connexion requise pour jouer."
