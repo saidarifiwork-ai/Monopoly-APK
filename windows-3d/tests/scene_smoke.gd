@@ -63,6 +63,9 @@ func run() -> void:
 	scene.state = snapshot.data
 	scene.update_state()
 	await process_frame
+	if scene.focused_board or scene.focus_overlay.visible or scene.view_distance != 18.5:
+		fail("vue générale pendant le salon")
+		return
 	if scene.pawns.size() != 2 or not has_button(scene, "Commencer"):
 		fail("pions et commandes du salon")
 		return
@@ -74,6 +77,14 @@ func run() -> void:
 	scene.state = snapshot.data
 	scene.update_state()
 	await process_frame
+	if not scene.focused_board or not scene.focus_overlay.visible or scene.view_distance != 14.7:
+		fail("plateau agrandi et décor flou au démarrage")
+		return
+	scene.view_distance = 13.0
+	scene.update_state()
+	if scene.view_distance != 13.0:
+		fail("zoom du joueur conservé pendant les actualisations")
+		return
 	if not has_button(scene, "Lancer pour l’ordre"):
 		fail("commande de tirage")
 		return
@@ -85,6 +96,9 @@ func run() -> void:
 	scene.state = lobby_auto
 	scene.update_state()
 	await process_frame
+	if scene.focused_board or scene.focus_overlay.visible or scene.view_distance != 18.5:
+		fail("retour à la vue générale du salon")
+		return
 	if not has_button(scene, "Reprendre le contrôle"):
 		fail("reprise du mode auto dans le salon")
 		return

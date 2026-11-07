@@ -16,7 +16,11 @@ func run() -> void:
 		root.add_child(friend)
 		friend.server = scene.api.server
 		await friend.join_room("Ami", scene.api.session.code)
+		if OS.get_environment("QUARTIERS_CAPTURE_FOCUS") == "1":
+			await scene.api.action("start")
 		await scene.refresh()
+	if OS.get_environment("QUARTIERS_CAPTURE_FOCUS") == "1":
+		scene.set_board_focus(true)
 	for frame in range(10):
 		await process_frame
 	await create_timer(1.0).timeout

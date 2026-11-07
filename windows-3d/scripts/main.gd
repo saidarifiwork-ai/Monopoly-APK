@@ -50,7 +50,9 @@ var state: Dictionary = {}
 var action_key := ""
 var view_angle := 0.65
 var view_elevation := 0.9
-var view_distance := 14.7
+var view_distance := 18.5
+var focused_board := false
+var focus_overlay: ColorRect
 var session_file := "user://quartiers-session.cfg"
 var saved_session: Dictionary = {}
 var saved_server := ""
@@ -68,6 +70,7 @@ func _ready() -> void:
 	load_session()
 	build_world()
 	build_ui()
+	get_viewport().size_changed.connect(update_camera)
 	timer = Timer.new()
 	timer.wait_time = 1.0
 	timer.timeout.connect(refresh)
@@ -87,6 +90,11 @@ func box(parent: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInsta
 	node.material_override = material(color)
 	node.position = pos
 	parent.add_child(node)
+	return node
+
+func board_box(parent: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
+	var node := box(parent, size, pos, color)
+	(node.material_override as StandardMaterial3D).shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return node
 
 func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, color: Color, top: float = -1.0) -> MeshInstance3D:
@@ -193,22 +201,22 @@ func build_world() -> void:
 	add_child(light)
 	build_city()
 	# The playing surface is a ring of rectangular cards and larger corner cards.
-	box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("b69d70"))
-	box(self, Vector3(11.7, 0.22, 11.7), Vector3(0, -0.22, 0), Color("426453"))
-	box(self, Vector3(8.95, 0.10, 8.95), Vector3(0, -0.04, 0), Color("9dce37"))
+	board_box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("294032"))
+	board_box(self, Vector3(11.7, 0.22, 11.7), Vector3(0, -0.22, 0), Color("263b2e"))
+	board_box(self, Vector3(8.95, 0.10, 8.95), Vector3(0, -0.04, 0), Color("cfe1c6"))
 	for i in range(40):
 		var pos := tile_position(i)
 		var corner := i % 10 == 0
 		var side := (i > 10 and i < 20) or i > 30
 		var dimensions := Vector3(1.20, 0.10, 1.20) if corner else (Vector3(1.20, 0.10, 0.96) if side else Vector3(0.96, 0.10, 1.20))
-		box(self, dimensions, pos, Color("dcebd0"))
+		board_box(self, dimensions, pos, Color("efbc74") if i == 10 else Color("dce9d3"))
 		var group_color := Color("9d977b")
 		for group_index in range(PROPERTY_GROUPS.size()):
 			if i in PROPERTY_GROUPS[group_index]:
 				group_color = GROUP_COLORS[group_index]
 				break
 		var band_offset := Vector3(0, 0.09, -0.49).rotated(Vector3.UP, tile_rotation(i))
-		var band := box(self, Vector3(0.88, 0.06, 0.16), pos + band_offset, group_color)
+		var band := board_box(self, Vector3(0.88, 0.06, 0.16), pos + band_offset, group_color)
 		band.rotation.y = tile_rotation(i)
 		band.visible = i in CITY_TILES
 		tile_colors.append(band)
@@ -233,14 +241,12 @@ func build_world() -> void:
 		elif i in [10, 20, 30]:
 			board_symbol("★", pos, i, Color("de8c28"))
 	# Coloured corners of the centre carry the two familiar card piles.
-	cylinder(self, 1.55, 0.03, Vector3(-2.65, 0.035, -2.65), Color("e6a276"))
-	cylinder(self, 1.55, 0.03, Vector3(2.65, 0.035, 2.65), Color("e6a276"))
-	box(self, Vector3(1.28, 0.06, 0.96), Vector3(-2.65, 0.08, -2.65), Color("fff8e7"))
-	box(self, Vector3(1.1, 0.34, 0.75), Vector3(-2.65, 0.28, -2.65), Color("85c9db"))
-	box(self, Vector3(1.17, 0.09, 0.82), Vector3(-2.65, 0.49, -2.65), Color("eff9f4"))
-	box(self, Vector3(0.9, 0.04, 0.50), Vector3(-2.65, 0.55, -2.65), Color("55adca"))
-	box(self, Vector3(1.28, 0.07, 0.96), Vector3(2.65, 0.09, 2.65), Color("fff8e7"))
-	box(self, Vector3(1.12, 0.07, 0.80), Vector3(2.65, 0.16, 2.65), Color("fa8c22"))
+	board_box(self, Vector3(1.28, 0.06, 0.96), Vector3(-2.65, 0.08, -2.65), Color("fff8e7"))
+	board_box(self, Vector3(1.1, 0.34, 0.75), Vector3(-2.65, 0.28, -2.65), Color("78b8d0"))
+	board_box(self, Vector3(1.17, 0.09, 0.82), Vector3(-2.65, 0.49, -2.65), Color("eff9f4"))
+	board_box(self, Vector3(0.9, 0.04, 0.50), Vector3(-2.65, 0.55, -2.65), Color("55adca"))
+	board_box(self, Vector3(1.28, 0.07, 0.96), Vector3(2.65, 0.09, 2.65), Color("fff8e7"))
+	board_box(self, Vector3(1.12, 0.07, 0.80), Vector3(2.65, 0.16, 2.65), Color("e6a14b"))
 	var question := Label3D.new()
 	question.text = "?"
 	question.position = Vector3(2.65, 0.21, 2.65)
@@ -249,9 +255,9 @@ func build_world() -> void:
 	question.pixel_size = 0.005
 	question.outline_size = 0
 	add_child(question)
-	box(self, Vector3(5.9, 0.05, 1.45), Vector3(0, 0.04, 0), Color("e9bb79"))
-	box(self, Vector3(5.55, 0.06, 1.17), Vector3(0, 0.10, 0), Color("fff9e7"))
-	box(self, Vector3(5.28, 0.06, 0.94), Vector3(0, 0.14, 0), Color("e74d3e"))
+	board_box(self, Vector3(5.9, 0.05, 1.45), Vector3(0, 0.04, 0), Color("e9bb79"))
+	board_box(self, Vector3(5.55, 0.06, 1.17), Vector3(0, 0.10, 0), Color("fff9e7"))
+	board_box(self, Vector3(5.28, 0.06, 0.94), Vector3(0, 0.14, 0), Color("be322e"))
 	for i in range(2):
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
@@ -277,7 +283,7 @@ func build_world() -> void:
 		dice_nodes.append(die)
 		dice_labels.append(face)
 	var title := Label3D.new()
-	title.text = "QUARTIERS MAROC"
+	title.text = "QUARTIERS"
 	title.position = Vector3(0, 0.19, 0)
 	title.rotation.x = -PI / 2
 	title.font_size = 100
@@ -289,6 +295,7 @@ func build_world() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 20.0
 	add_child(camera)
+	build_focus_overlay()
 	update_camera()
 
 # A stylised city surrounds the shared board; these are not landmark replicas.
@@ -410,11 +417,39 @@ func make_tree(pos: Vector3, variant: int) -> void:
 	foliage.position = pos + Vector3(0, 1.04, 0)
 	add_child(foliage)
 
+func build_focus_overlay() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 1
+	add_child(layer)
+	focus_overlay = ColorRect.new()
+	focus_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	focus_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shader_material := ShaderMaterial.new()
+	shader_material.shader = load("res://shaders/board_focus.gdshader")
+	focus_overlay.material = shader_material
+	focus_overlay.visible = false
+	layer.add_child(focus_overlay)
+
+func set_board_focus(enabled: bool) -> void:
+	if focused_board == enabled:
+		return
+	focused_board = enabled
+	view_distance = 14.7 if enabled else 18.5
+	focus_overlay.visible = enabled
+	update_camera()
+
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
 	var target := Vector3(cos(view_angle), 0, -sin(view_angle)) * 1.5
 	camera.position = target + Vector3(sin(view_angle) * view_distance, max(6.0, view_distance * view_elevation), cos(view_angle) * view_distance)
 	camera.look_at(target, Vector3.UP)
+	if focus_overlay != null:
+		var viewport_size := get_viewport().get_visible_rect().size
+		if viewport_size.x > 0 and viewport_size.y > 0:
+			var shader_material := focus_overlay.material as ShaderMaterial
+			var corners := [Vector3(-6.15, 0, -6.15), Vector3(6.15, 0, -6.15), Vector3(6.15, 0, 6.15), Vector3(-6.15, 0, 6.15)]
+			for i in range(4):
+				shader_material.set_shader_parameter(["corner_a", "corner_b", "corner_c", "corner_d"][i], camera.unproject_position(corners[i]) / viewport_size)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -472,6 +507,7 @@ func add_button(parent: Node, text: String, callback: Callable) -> Button:
 
 func build_ui() -> void:
 	var layer := CanvasLayer.new()
+	layer.layer = 2
 	add_child(layer)
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -609,6 +645,7 @@ func update_state() -> void:
 	var tiles: Array = state.get("tiles", [])
 	var me: String = str(state.get("me", ""))
 	var phase: String = str(state.get("phase", ""))
+	set_board_focus(phase in ["opening", "playing", "finished"])
 	var current_index := int(state.get("turn", 0))
 	var current: Dictionary = players[current_index] if current_index < players.size() else {}
 	var mine: Dictionary = {}
@@ -689,7 +726,9 @@ func update_state() -> void:
 		set_tile_text(labels[i], str(tiles[i].name), int(tiles[i].get("price", 0)))
 		var c := str(tiles[i].get("color", ""))
 		if c.begins_with("#") and tile_color_values.get(i, "") != c:
-			tile_colors[i].material_override = material(Color(c))
+			var band_material := material(Color(c))
+			band_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			tile_colors[i].material_override = band_material
 			tile_color_values[i] = c
 		update_ownership(i, tiles[i], players)
 	if Time.get_ticks_msec() < error_until:
@@ -922,6 +961,7 @@ func leave_session() -> void:
 	save_session()
 	api.session = {}
 	state = {}
+	set_board_focus(false)
 	action_key = ""
 	session_view.visible = true
 	action_scroll.visible = false
