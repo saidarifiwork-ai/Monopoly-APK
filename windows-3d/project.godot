@@ -1,0 +1,6 @@
+; Base de la version Windows 3D, en cours de développement.
+config_version=5
+[application]
+config/name="Quartiers Maroc 3D"
+[rendering]
+renderer/rendering_method="gl_compatibility"
