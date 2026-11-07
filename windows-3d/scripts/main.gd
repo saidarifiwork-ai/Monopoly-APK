@@ -30,6 +30,7 @@ var last_turn_key := ""
 var victory_key := ""
 var victory_dialog: AcceptDialog
 var sound_enabled := true
+var tile_details: Label
 var status: Label
 var room_label: Label
 var players_label: RichTextLabel
@@ -49,7 +50,7 @@ var state: Dictionary = {}
 var action_key := ""
 var view_angle := 0.65
 var view_elevation := 0.9
-var view_distance := 16.5
+var view_distance := 14.7
 var session_file := "user://quartiers-session.cfg"
 var saved_session: Dictionary = {}
 var saved_server := ""
@@ -127,14 +128,34 @@ func tile_rotation(index: int) -> float:
 		return PI / 2
 	return 0.0
 
+# Wrap long names onto the card; keep the full spelling and the price.
+func set_tile_text(label: Label3D, tile_name: String, price: int) -> void:
+	var lines: Array[String] = []
+	var line := ""
+	for word in tile_name.split(" ", false):
+		if not line.is_empty() and (line.length() + word.length() + 1) > 11:
+			lines.append(line)
+			line = word
+		else:
+			line = word if line.is_empty() else line + " " + word
+	if not line.is_empty():
+		lines.append(line)
+	if price > 0:
+		lines.append(str(price) + " DH")
+	label.text = "\n".join(lines)
+	var widest := 0.0
+	for item in lines:
+		widest = maxf(widest, ThemeDB.fallback_font.get_string_size(item, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size).x * label.pixel_size)
+	label.scale.x = minf(1.0, 0.84 / maxf(widest, 0.01))
+
 func label_on_tile(text: String, pos: Vector3, index: int) -> Label3D:
 	var label := Label3D.new()
 	label.text = text
 	label.position = pos + Vector3(0, 0.075, 0.10).rotated(Vector3.UP, tile_rotation(index))
 	label.rotation = Vector3(-PI / 2, 0, 0)
 	label.rotate_y(tile_rotation(index))
-	label.font_size = 32
-	label.pixel_size = 0.0028
+	label.font_size = 50
+	label.pixel_size = 0.0035
 	label.modulate = Color("172521")
 	label.outline_size = 0
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
@@ -198,7 +219,9 @@ func build_world() -> void:
 		var tile_text: String = DEFAULT_NAMES[i]
 		if DEFAULT_PRICES.has(i):
 			tile_text += "\n" + str(DEFAULT_PRICES[i]) + " DH"
-		labels.append(label_on_tile(tile_text, pos, i))
+		var card_label := label_on_tile(tile_text, pos, i)
+		set_tile_text(card_label, DEFAULT_NAMES[i], int(DEFAULT_PRICES.get(i, 0)))
+		labels.append(card_label)
 		if i in [7, 22, 36]:
 			board_symbol("?", pos, i, Color("dc2b87"))
 		elif i in [2, 17, 33]:
@@ -389,8 +412,9 @@ func make_tree(pos: Vector3, variant: int) -> void:
 
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
-	camera.position = Vector3(sin(view_angle) * view_distance, max(6.0, view_distance * view_elevation), cos(view_angle) * view_distance)
-	camera.look_at(Vector3(0, 0, 0), Vector3.UP)
+	var target := Vector3(cos(view_angle), 0, -sin(view_angle)) * 1.5
+	camera.position = target + Vector3(sin(view_angle) * view_distance, max(6.0, view_distance * view_elevation), cos(view_angle) * view_distance)
+	camera.look_at(target, Vector3.UP)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -410,6 +434,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		view_elevation = clamp(view_elevation + event.relative.y * 0.004, 0.55, 1.6)
 		update_camera()
 	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			inspect_tile(event.position)
+			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			view_distance = max(10.0, view_distance - 1.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -417,6 +444,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			return
 		update_camera()
+
+func inspect_tile(screen_pos: Vector2) -> void:
+	var ray_start := camera.project_ray_origin(screen_pos)
+	var ray_direction := camera.project_ray_normal(screen_pos)
+	var point = Plane(Vector3.UP, 0.05).intersects_ray(ray_start, ray_direction)
+	if point == null:
+		return
+	var closest := -1
+	var distance := 0.82
+	for i in range(40):
+		var tile := tile_position(i)
+		var d := Vector2(point.x - tile.x, point.z - tile.z).length()
+		if d < distance:
+			distance = d
+			closest = i
+	if closest >= 0:
+		tile_details.text = labels[closest].text.replace("\n", " ")
 
 func add_button(parent: Node, text: String, callback: Callable) -> Button:
 	var button := Button.new()
@@ -448,6 +492,11 @@ func build_ui() -> void:
 	note.text = "Prototype : monuments et commandes incomplets.\nCaméra : flèches ou clic droit, molette."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(note)
+	tile_details = Label.new()
+	tile_details.text = "Clique sur une case pour la lire"
+	tile_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tile_details.add_theme_font_size_override("font_size", 20)
+	content.add_child(tile_details)
 	status = Label.new()
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.text = "Connexion requise pour jouer."
@@ -637,9 +686,7 @@ func update_state() -> void:
 		turn_alert.play()
 	last_turn_key = turn_key
 	for i in range(min(tiles.size(), labels.size())):
-		labels[i].text = str(tiles[i].name)
-		if int(tiles[i].get("price", 0)) > 0:
-			labels[i].text += "\n" + str(int(tiles[i].price)) + " DH"
+		set_tile_text(labels[i], str(tiles[i].name), int(tiles[i].get("price", 0)))
 		var c := str(tiles[i].get("color", ""))
 		if c.begins_with("#") and tile_color_values.get(i, "") != c:
 			tile_colors[i].material_override = material(Color(c))

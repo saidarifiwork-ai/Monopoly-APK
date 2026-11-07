@@ -35,6 +35,11 @@ func run() -> void:
 	if not scene.labels[1].text.contains("60 DH") or not scene.tile_colors[1].visible or scene.tile_colors[2].visible:
 		fail("prix et couleurs des cases")
 		return
+	# Clicking a card exposes its full name and price in large UI text.
+	scene.inspect_tile(scene.camera.unproject_position(scene.tile_position(1) + Vector3(0, 0.05, 0)))
+	if not scene.tile_details.text.contains("Chefchaouen") or not scene.tile_details.text.contains("60 DH"):
+		fail("lecture agrandie de la case et de son prix")
+		return
 	var default_dots := 0
 	for pip in scene.dice_pips[0]:
 		if pip.visible:
