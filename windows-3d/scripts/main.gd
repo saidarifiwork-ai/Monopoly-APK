@@ -15,6 +15,7 @@ var tile_colors: Array[MeshInstance3D] = []
 var ownership_markers: Array[Node3D] = []
 var tile_visuals := {}
 var tile_color_values := {}
+var city_batches := {}
 var dice_nodes: Array[Node3D] = []
 var dice_labels: Array[Label3D] = []
 var pawn_tweens := {}
@@ -124,54 +125,19 @@ func build_world() -> void:
 	var env := WorldEnvironment.new()
 	var sky_env := Environment.new()
 	sky_env.background_mode = Environment.BG_COLOR
-	sky_env.background_color = Color("18322d")
+	sky_env.background_color = Color("a8c8c6")
 	sky_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	sky_env.ambient_light_color = Color("f9dcb4")
-	sky_env.ambient_light_energy = 0.85
+	sky_env.ambient_light_color = Color("f9f3df")
+	sky_env.ambient_light_energy = 0.48
 	env.environment = sky_env
 	add_child(env)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-58, -28, 0)
 	light.light_color = Color("fff1d1")
-	light.light_energy = 1.2
-	light.shadow_enabled = false
+	light.light_energy = 0.72
+	light.shadow_enabled = true
 	add_child(light)
-	box(self, Vector3(32, 0.4, 32), Vector3(0, -2.4, 0), Color("8d5c45"))
-	box(self, Vector3(30, 8, 0.4), Vector3(0, 1.6, -14), Color("c8936e"))
-	box(self, Vector3(0.4, 8, 28), Vector3(-14, 1.6, 0), Color("be8767"))
-	# Repeated glazed panels evoke zellige without texture downloads.
-	for i in range(-12, 13, 2):
-		box(self, Vector3(1.4, 1.4, 0.12), Vector3(i, -0.55, -13.75), Color("26766a") if i % 4 == 0 else Color("e7d0a0"))
-	for x in [-10, -6, 6, 10]:
-		cylinder(self, 0.36, 6.0, Vector3(x, 0.7, -13.2), Color("f0ddbd"))
-		cylinder(self, 0.52, 0.25, Vector3(x, 3.75, -13.2), Color("c49a54"))
-	# A woven rug, repeated geometric tiles and warm lanterns keep the room light.
-	box(self, Vector3(19.5, 0.035, 19.5), Vector3(0, -2.17, 0), Color("953f37"))
-	box(self, Vector3(18.4, 0.035, 18.4), Vector3(0, -2.14, 0), Color("e6c287"))
-	box(self, Vector3(17.6, 0.035, 17.6), Vector3(0, -2.11, 0), Color("236a5b"))
-	box(self, Vector3(16.6, 0.035, 16.6), Vector3(0, -2.08, 0), Color("b45848"))
-	for n in range(-7, 8, 2):
-		for side in [-1, 1]:
-			var motif := box(self, Vector3(0.46, 0.04, 0.46), Vector3(n, -2.04, side * 8.4), Color("f4d29a"))
-			motif.rotation.y = PI / 4
-			var edge := box(self, Vector3(0.46, 0.04, 0.46), Vector3(side * 8.4, -2.04, n), Color("f4d29a"))
-			edge.rotation.y = PI / 4
-	for x in [-10, -5, 0, 5, 10]:
-		box(self, Vector3(2.5, 3.8, 0.12), Vector3(x, 0.35, -13.65), Color("d9b36d"))
-		box(self, Vector3(2.22, 3.53, 0.14), Vector3(x, 0.35, -13.54), Color("1f5f58"))
-		box(self, Vector3(0.07, 3.53, 0.16), Vector3(x, 0.35, -13.43), Color("d9b36d"))
-		box(self, Vector3(2.22, 0.07, 0.16), Vector3(x, 0.20, -13.43), Color("d9b36d"))
-		var outer_arch := cylinder(self, 1.25, 0.11, Vector3(x, 2.20, -13.65), Color("d9b36d"))
-		outer_arch.rotation.x = PI / 2
-		var inner_arch := cylinder(self, 1.11, 0.13, Vector3(x, 2.20, -13.51), Color("1f5f58"))
-		inner_arch.rotation.x = PI / 2
-	for x in [-8, 0, 8]:
-		cylinder(self, 0.04, 2.4, Vector3(x, 4.0, -10.8), Color("b18a48"))
-		cylinder(self, 0.30, 0.54, Vector3(x, 2.65, -10.8), Color("e1a750"), 0.18)
-		cylinder(self, 0.18, 0.17, Vector3(x, 2.99, -10.8), Color("eac47d"), 0.04)
-	for x in [-4.9, 4.9]:
-		for z in [-4.9, 4.9]:
-			cylinder(self, 0.27, 1.65, Vector3(x, -1.42, z), Color("66412e"))
+	build_city()
 	box(self, Vector3(12.1, 0.5, 12.1), Vector3(0, -0.6, 0), Color("66412e"))
 	box(self, Vector3(11.3, 0.22, 11.3), Vector3(0, -0.22, 0), Color("d8c89d"))
 	box(self, Vector3(8.7, 0.10, 8.7), Vector3(0, -0.04, 0), Color("478461"))
@@ -194,6 +160,10 @@ func build_world() -> void:
 			# Placeholder silhouettes: not a researched representation of a real city.
 			box(self, Vector3(0.24, 0.28, 0.22), pos + Vector3(0, 0.23, -0.12), Color("e9c99c"))
 			cylinder(self, 0.19, 0.13, pos + Vector3(0, 0.44, -0.12), Color("b55b42"), 0.02)
+	box(self, Vector3(1.2, 0.10, 0.85), Vector3(-2.4, 0.12, -1.8), Color("f2dfb3"))
+	box(self, Vector3(1.0, 0.08, 0.66), Vector3(-2.4, 0.21, -1.8), Color("d07f42"))
+	box(self, Vector3(1.2, 0.10, 0.85), Vector3(2.4, 0.12, 1.8), Color("f2dfb3"))
+	box(self, Vector3(1.0, 0.08, 0.66), Vector3(2.4, 0.21, 1.8), Color("5d9da0"))
 	for x in [-2.5, 2.5]:
 		for z in [-2.5, 2.5]:
 			var board_motif := box(self, Vector3(0.6, 0.035, 0.6), Vector3(x, 0.035, z), Color("d8bf82"))
@@ -223,11 +193,147 @@ func build_world() -> void:
 	title.modulate = Color("f8e8c7")
 	add_child(title)
 	camera = Camera3D.new()
-	camera.fov = 47
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 20.0
 	add_child(camera)
 	update_camera()
 
+# A stylised city surrounds the shared board; these are not landmark replicas.
+func build_city() -> void:
+	box(self, Vector3(40, 0.3, 40), Vector3(0, -1.22, 0), Color("8ab760"))
+	for side in [-1, 1]:
+		box(self, Vector3(40, 0.07, 2.8), Vector3(0, -1.02, side * 9.0), Color("6f7774"))
+		box(self, Vector3(2.8, 0.07, 40), Vector3(side * 9.0, -1.01, 0), Color("6f7774"))
+		box(self, Vector3(40, 0.11, 0.65), Vector3(0, -0.98, side * 7.3), Color("d3d9d2"))
+		box(self, Vector3(0.65, 0.11, 40), Vector3(side * 7.3, -0.97, 0), Color("d3d9d2"))
+		for n in range(-18, 19, 2):
+			box(self, Vector3(0.85, 0.015, 0.07), Vector3(n, -0.96, side * 9.0), Color("ede6c3"))
+			box(self, Vector3(0.07, 0.015, 0.85), Vector3(side * 9.0, -0.95, n), Color("ede6c3"))
+	for side in [-1, 1]:
+		for stripe in range(-2, 3):
+			box(self, Vector3(0.25, 0.025, 1.8), Vector3(stripe * 0.42, -0.94, side * 9.0), Color("f5f3df"))
+			box(self, Vector3(1.8, 0.025, 0.25), Vector3(side * 9.0, -0.93, stripe * 0.42), Color("f5f3df"))
+	for i in range(-2, 3):
+		for side in [-1, 1]:
+			make_building(Vector3(i * 4.4, -0.9, side * 13.0), i + side * 3, side < 0)
+	for side in [-1, 1]:
+		for i in range(-1, 2):
+			make_building(Vector3(side * 14.0, -0.9, i * 5.0), i + side * 7, side < 0)
+	for side in [-1, 1]:
+		for n in [-15, -11, -5, 0, 5, 11, 15]:
+			make_tree(Vector3(n, -0.9, side * 6.8), n + side)
+			make_tree(Vector3(side * 6.8, -0.9, n), n - side)
+	make_vehicle(Vector3(-4.5, -0.65, 8.65), 0.0, Color("e6a632"))
+	make_vehicle(Vector3(5.0, -0.65, -8.65), PI, Color("c76155"))
+	make_vehicle(Vector3(-8.65, -0.65, 3.0), PI / 2, Color("72aab4"))
+	for n in [-5, -2, 2, 5]:
+		make_pedestrian(Vector3(n, -0.88, 7.3), n)
+		make_pedestrian(Vector3(7.3, -0.88, n), n + 2)
+	flush_city_details()
+	for x in [-6.6, 6.6]:
+		for z in [-6.6, 6.6]:
+			cylinder(self, 0.05, 1.25, Vector3(x, -0.25, z), Color("2f4742"))
+			var lamp := MeshInstance3D.new()
+			var globe := SphereMesh.new()
+			globe.radius = 0.17
+			globe.height = 0.34
+			lamp.mesh = globe
+			lamp.material_override = material(Color("fff2b3"))
+			lamp.position = Vector3(x, 0.46, z)
+			add_child(lamp)
+
+func make_building(pos: Vector3, variant: int, _reverse: bool) -> void:
+	var palette := [Color("e9b98e"), Color("d98b6e"), Color("e4d5b7"), Color("85b4a5"), Color("cba48c")]
+	var tone: Color = palette[absi(variant) % palette.size()]
+	var floors := 2 + absi(variant) % 2
+	var height := float(floors) * 0.9
+	box(self, Vector3(2.55, height, 2.0), pos + Vector3(0, height / 2, 0), tone)
+	box(self, Vector3(2.72, 0.17, 2.17), pos + Vector3(0, height + 0.08, 0), Color("f1dfbf"))
+	box(self, Vector3(2.25, 0.13, 1.75), pos + Vector3(0, height + 0.23, 0), Color("788983"))
+	for face in [-1, 1]:
+		var face_z: float = face * 1.03
+		for floor in range(floors):
+			for col in [-1, 0, 1]:
+				var window_pos := pos + Vector3(col * 0.68, 0.55 + floor * 0.9, face_z)
+				city_detail_box(Vector3(0.46, 0.60, 0.08), window_pos, Color("f5e2bf"))
+				city_detail_box(Vector3(0.33, 0.47, 0.10), window_pos + Vector3(0, 0, face * 0.06), Color("51868b"))
+		box(self, Vector3(0.48, 0.8, 0.13), pos + Vector3(0, 0.40, face_z + face * 0.12), Color("534d42"))
+	for face in [-1, 1]:
+		for floor in range(floors):
+			for col in [-1, 0, 1]:
+				var side_window := pos + Vector3(face * 1.30, 0.55 + floor * 0.9, col * 0.50)
+				city_detail_box(Vector3(0.08, 0.60, 0.38), side_window, Color("f5e2bf"))
+				city_detail_box(Vector3(0.10, 0.47, 0.27), side_window + Vector3(face * 0.06, 0, 0), Color("51868b"))
+
+# Windows share a few GPU batches instead of hundreds of separate meshes.
+func city_detail_box(size: Vector3, pos: Vector3, color: Color) -> void:
+	var key := str(size) + ":" + color.to_html(false)
+	if not city_batches.has(key):
+		city_batches[key] = {"size": size, "color": color, "positions": []}
+	city_batches[key].positions.append(pos)
+
+func flush_city_details() -> void:
+	for key in city_batches:
+		var detail: Dictionary = city_batches[key]
+		var mesh := BoxMesh.new()
+		mesh.size = detail.size
+		var instances := MultiMesh.new()
+		instances.transform_format = MultiMesh.TRANSFORM_3D
+		instances.mesh = mesh
+		instances.instance_count = detail.positions.size()
+		for i in range(detail.positions.size()):
+			instances.set_instance_transform(i, Transform3D(Basis.IDENTITY, detail.positions[i]))
+		var node := MultiMeshInstance3D.new()
+		node.multimesh = instances
+		node.material_override = material(detail.color)
+		add_child(node)
+	city_batches.clear()
+
+func make_vehicle(pos: Vector3, angle: float, paint: Color) -> void:
+	var car := Node3D.new()
+	car.position = pos
+	car.rotation.y = angle
+	add_child(car)
+	box(car, Vector3(0.85, 0.24, 0.44), Vector3(0, 0.06, 0), paint)
+	box(car, Vector3(0.40, 0.22, 0.38), Vector3(0.05, 0.28, 0), Color("9ac6ca"))
+	for x in [-0.25, 0.25]:
+		for z in [-0.24, 0.24]:
+			var wheel := cylinder(car, 0.09, 0.08, Vector3(x, -0.04, z), Color("343c39"))
+			wheel.rotation.x = PI / 2
+
+func make_pedestrian(pos: Vector3, variant: int) -> void:
+	var person := Node3D.new()
+	person.position = pos
+	add_child(person)
+	var shirts := [Color("c84f45"), Color("477d9a"), Color("e2a84b"), Color("5d8f5c")]
+	cylinder(person, 0.10, 0.30, Vector3(0, 0.28, 0), shirts[absi(variant) % shirts.size()])
+	var head := MeshInstance3D.new()
+	var shape := SphereMesh.new()
+	shape.radius = 0.10
+	shape.height = 0.20
+	shape.radial_segments = 10
+	shape.rings = 5
+	head.mesh = shape
+	head.material_override = material(Color("e6b691"))
+	head.position = Vector3(0, 0.53, 0)
+	person.add_child(head)
+
+func make_tree(pos: Vector3, variant: int) -> void:
+	cylinder(self, 0.12, 0.72, pos + Vector3(0, 0.36, 0), Color("865b42"))
+	var foliage := MeshInstance3D.new()
+	var shape := SphereMesh.new()
+	shape.radius = 0.48
+	shape.height = 0.96
+	shape.radial_segments = 10
+	shape.rings = 5
+	foliage.mesh = shape
+	var greens := [Color("719b48"), Color("a2ad43"), Color("d5a841")]
+	foliage.material_override = material(greens[absi(variant) % greens.size()])
+	foliage.position = pos + Vector3(0, 1.04, 0)
+	add_child(foliage)
+
 func update_camera() -> void:
+	camera.size = view_distance * 1.16
 	camera.position = Vector3(sin(view_angle) * view_distance, max(6.0, view_distance * view_elevation), cos(view_angle) * view_distance)
 	camera.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -440,7 +546,15 @@ func update_state() -> void:
 		var pawn: MeshInstance3D
 		var is_new: bool = not pawns.has(player.id)
 		if is_new:
-			pawn = cylinder(self, 0.20, 0.42, Vector3.ZERO, COLORS[i % COLORS.size()])
+			pawn = cylinder(self, 0.17, 0.40, Vector3.ZERO, COLORS[i % COLORS.size()])
+			var head := MeshInstance3D.new()
+			var head_mesh := SphereMesh.new()
+			head_mesh.radius = 0.14
+			head_mesh.height = 0.28
+			head.mesh = head_mesh
+			head.material_override = material(Color("f2c9a5"))
+			head.position = Vector3(0, 0.29, 0)
+			pawn.add_child(head)
 			pawns[player.id] = pawn
 		else:
 			pawn = pawns[player.id]

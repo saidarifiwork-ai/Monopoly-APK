@@ -1,7 +1,7 @@
 # Quartiers Maroc — préparation Windows 3D
 
 Cette version est un **prototype de développement**, pas encore le jeu 3D final.
-Une scène Godot présente une table, une pièce inspirée du Maroc et les 40 cases.
+Une scène Godot présente le plateau de 40 cases dans une ville stylisée, avec rues, bâtiments, arbres, véhicules et passants. La caméra inclinée peut être tournée et rapprochée.
 Les formes placées sur les villes sont des silhouettes provisoires : elles ne
 représentent pas encore les monuments recherchés. Les dés sont représentés en 3D, les pions suivent les déplacements reçus du serveur et les paiements s’affichent sur les cases. Le son fourni pour un refus d’offre est repris ; les cartes, les autres sons et animations restent à adapter. Le prototype n'a pas été testé sur
 un PC Windows physique et les performances graphiques restent à vérifier.
@@ -33,8 +33,7 @@ client Flutter utilisé par l'APK et la scène Godot : les trois ont rejoint le 
 salon et reçu un déplacement. Cela ne remplace pas un essai en partie complète sur
 un vrai téléphone Android et un vrai PC Windows.
 
-Le choix artistique demandé est une pièce inspirée du Maroc et un symbole 3D par
-ville sur le plateau existant. Les références des monuments doivent être vérifiées
+Le choix artistique demandé est une ville stylisée autour du plateau et un symbole 3D par ville sur le plateau existant. Les références des monuments doivent être vérifiées
 sur le web avant la modélisation ; les sources web de référence ne sont pas
 accessibles depuis l'environnement actuel. `VILLES.md` liste les cases extraites
 du serveur, sans inventer de correspondance ville-monument.
