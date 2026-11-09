@@ -41,3 +41,31 @@ déploiement du serveur ; l’accueil Android nécessite l’APK v1.0.13 ou ult�
 
 Validation : `node --test test/*.test.js`, `flutter analyze`, puis
 `flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8866` depuis `mobile/`.
+
+## Stratégie contextuelle d’Expert et d’Ultime
+
+Le moteur compare les décisions à partir de la situation courante :
+
+- Trésorerie : état du marché, loyers adverses atteignables, impôts connus et
+  revenus probables des biens déjà possédés. Ultime estime deux déplacements
+  futurs avec les probabilités normales des dés, sans consulter les cartes cachées.
+- Investissements : comparaison du gain de loyer d’une construction avec celui
+  d’une levée d’hypothèque. Une construction n’est plus retardée systématiquement
+  par la levée d’hypothèque d’un bien peu rentable.
+- Échanges : évaluation du portefeuille avant et après l’échange complet,
+  y compris les groupes que l’adversaire reçoit. Un robot peut proposer l’achat
+  ou l’échange de la dernière ville d’un groupe.
+- Dettes : comparaison des revenus et des options stratégiques perdus en vendant
+  des bâtiments ou en hypothéquant des propriétés légales.
+- Enchères : possibilité d’ouvrir directement une enchère lorsqu’un achat direct
+  ne convient pas, plutôt que d’investir ailleurs avant de tenter d’enchérir.
+
+Une proposition initiée par un robot expire après 45 secondes sans réponse,
+avec une annonce dans le journal. Le délai repart après une contre-offre.
+Les propositions sont espacées d’au moins deux minutes par robot, et chaque
+robot ne fait au maximum que deux contre-offres dans une même négociation.
+Les robots restent des concurrents indépendants et utilisent les mêmes actions
+validées par le serveur que les humains.
+
+Ces changements sont exécutés sur le serveur : l’APK v1.0.13 reste compatible,
+sans réinstallation pour cette évolution de la stratégie.

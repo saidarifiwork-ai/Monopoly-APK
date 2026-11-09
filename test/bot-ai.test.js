@@ -8,7 +8,7 @@ test('beginner can miss an affordable purchase; higher levels purchase deliberat
 test('advanced robots value group completion and blocking opponents',()=>{const {p,other,s}=fixture();const base=ai.value(s,p,s.tiles[1]);s.tiles[3].owner=p.id;assert(ai.value(s,p,s.tiles[1])>base);s.tiles[3].owner=other.id;assert(ai.value(s,p,s.tiles[1])>base);});
 test('Ultimate reserves extra cash for likely opposing rents and bids within its budget',()=>{const {p,other,s}=fixture();p.pos=0;p.money=500;const safe=ai.reserve(s,p);s.tiles[6].owner=other.id;s.tiles[6].level=4;assert(ai.reserve(s,p)>safe);for(const {id} of ai.LEVELS){p.botLevel=id;const limit=ai.bidLimit(s,p,s.tiles[1]);assert(limit>=0&&limit<=p.money);} });
 test('building respects ownership, mortgages, balance and funds; beginners do not build',()=>{const {p,s}=fixture();for(const i of [1,3])s.tiles[i].owner=p.id;assert([1,3].includes(ai.buildIndex(s,p)));s.tiles[1].level=1;assert.equal(ai.buildIndex(s,p),3);s.tiles[1].mortgaged=true;assert.equal(ai.buildIndex(s,p),-1);s.tiles[1].mortgaged=false;p.money=0;assert.equal(ai.buildIndex(s,p),-1);p.money=1500;p.botLevel='beginner';assert.equal(ai.buildIndex(s,p),-1);});
-test('debt strategy avoids illegal mortgages of groups with houses and preserves income',()=>{const {p,s}=fixture();s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;s.tiles[1].level=1;assert.deepEqual(ai.debtAction(s,p),{type:'sellhouse',index:1});s.tiles[5].owner=p.id;assert.deepEqual(ai.debtAction(s,p),{type:'mortgage',index:5});});
+test('debt strategy avoids illegal mortgages of groups with houses and preserves income',()=>{const {p,s}=fixture();s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;s.tiles[1].level=1;assert.deepEqual(ai.debtAction(s,p),{type:'sellhouse',index:1});s.tiles[5].owner=p.id;s.tiles[1].level=3;s.tiles[3].level=3;s.players[1].pos=35;s.debts=[{player:p.id,amount:p.money+100}];assert.deepEqual(ai.debtAction(s,p),{type:'mortgage',index:5});});
 test('trade decisions distinguish buying from selling and refuse unaffordable deals',()=>{const {p,other,s}=fixture();s.tiles[1].owner=other.id;p.money=1;assert.equal(ai.tradeDecision(s,p,{index:1,buyer:p.id,seller:other.id,amount:60,offered:[]}).type,'rejectoffer');s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;assert.equal(ai.tradeDecision(s,p,{index:1,buyer:other.id,seller:p.id,amount:10,offered:[]}).type,'rejectoffer');});
 test('host assigns each robot separately, rejects bad levels, and replay preserves levels',()=>{const {e,p,s}=fixture();s.phase='lobby';e.invokeGameAction(s,p,{type:'addbot',botLevel:'ultimate'});e.invokeGameAction(s,p,{type:'addbot',botLevel:'beginner'});assert.equal(s.players[2].botLevel,'ultimate');assert.equal(s.players[3].botLevel,'beginner');assert.throws(()=>e.invokeGameAction(s,p,{type:'addbot',botLevel:'cheat'}));s.phase='finished';e.invokeGameAction(s,p,{type:'rematch'});assert.equal(s.players[2].botLevel,'ultimate');assert.equal(s.players[3].botLevel,'beginner');});
 test('every bot level performs real legal server actions without extra money or dice privileges',()=>{for(const {id} of ai.LEVELS){const {e,p,s}=fixture(id);p.bot=true;p.pos=1;const before=p.money;e.invokeBotStep(s);if(s.tiles[1].owner===p.id)assert.equal(p.money,before-60);for(let n=0;n<8&&s.turn===0;n++){s.botNext=0;e.invokeBotStep(s);}assert(s.players.every(x=>x.money>=0));assert(s.turn!==0||s.auction);}});
@@ -36,4 +36,66 @@ test('two Ultimate opponents compete with each other and never pool their cash',
  auction.start(s,s.players[0],0);const bidding=new Set();for(let n=1;s.auction&&n<300;n++){const who=s.auction.respondent,before=s.auction.amount;auction.tick(s,n*500);if(!s.auction||s.auction.amount>before)bidding.add(who);}
  assert(!s.auction);assert(bidding.has('one')&&bidding.has('two'));const winner=s.players.find(p=>p.id===s.tiles[0].owner);assert(winner&&winner.money<1000);const loser=s.players.find(p=>p.bot&&p!==winner);assert.equal(loser.money,1000);
  const {p,s:room,other}=fixture();room.tiles[3].owner=other.id;const againstHuman=ai.value(room,p,room.tiles[1]);other.bot=true;other.botLevel='ultimate';assert.equal(ai.value(room,p,room.tiles[1]),againstHuman);
+});
+
+test('reserve adapts between an open board, dangerous rents and own income',()=>{
+ const {p,s,other}=fixture();const open=ai.reserve(s,p);
+ for(const t of s.tiles)if(t.price>0)t.owner=other.id;
+ const closed=ai.reserve(s,p);assert(closed>open);
+ s.tiles[6].level=4;assert(ai.reserve(s,p)>closed);
+ for(const t of s.tiles)if(t.price>0)t.owner=p.id;
+ assert(ai.reserve(s,p)<closed);
+});
+test('advanced investment compares building income with redeeming an idle property',()=>{
+ const {p,s}=fixture();s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;
+ s.tiles[1].level=2;s.tiles[3].level=2;s.tiles[5].owner=p.id;s.tiles[5].mortgaged=true;
+ const decision=ai.investmentAction(s,p);assert.equal(decision.type,'build');assert([1,3].includes(decision.index));
+ p.money=0;assert.equal(ai.investmentAction(s,p),null);
+});
+test('robots can seek the missing city with a legal affordable offer and a cooldown',()=>{
+ const {p,s,other}=fixture();p.money=1000;s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;s.tiles[16].owner=other.id;
+ const before=JSON.stringify(s);const offer=ai.offerPlan(s,p,1000000);assert(offer);assert.equal(offer.index,16);assert(offer.amount>0&&offer.amount<p.money);assert.equal(JSON.stringify(s),before);
+ for(const i of offer.offered)assert.equal(s.tiles[i].owner,p.id);
+ p.lastBotOfferAt=1000000;assert.equal(ai.offerPlan(s,p,1001000),null);
+});
+test('trade analysis considers the whole exchange and is equally cautious with a bot opponent',()=>{
+ const {p,s,other}=fixture();s.tiles[1].owner=other.id;s.tiles[3].owner=p.id;s.tiles[6].owner=p.id;s.tiles[8].owner=p.id;s.tiles[9].owner=p.id;
+ const cheap={index:1,buyer:p.id,seller:other.id,amount:1,offered:[]};assert.equal(ai.tradeDecision(s,p,cheap).type,'acceptoffer');
+ const costly={...cheap,amount:2000};assert.notEqual(ai.tradeDecision(s,p,costly).type,'acceptoffer');
+ const exchange={...cheap,offered:[6]};const human=ai.tradeDecision(s,p,exchange);other.bot=true;assert.deepEqual(ai.tradeDecision(s,p,exchange),human);
+ assert(ai.tradeValues(s,p,exchange).fair<ai.tradeValues(s,p,cheap).fair);
+});
+test('bot-initiated offers expire and bot counteroffers cannot loop forever',()=>{
+ const {e,p,s,other}=fixture();p.bot=true;other.bot=true;other.botLevel='ultimate';
+ s.tiles[1].owner=other.id;s.offer={index:1,buyer:p.id,seller:other.id,respondent:other.id,amount:50,offered:[],botInitiated:true,botDeadline:Date.now()-1};e.invokeBotStep(s);assert.equal(s.offer,null);
+ s.offer={index:1,buyer:p.id,seller:other.id,respondent:other.id,amount:140,offered:[],botCounterRounds:2};
+ // A complete group is protected, so an insufficient nontrivial offer would be countered.
+ s.tiles[3].owner=other.id;s.offer.amount=300;e.invokeBotStep(s);assert.equal(s.offer,null);
+});
+test('the real bot turn can initiate a negotiation for its missing group member',()=>{
+ const {e,p,s,other}=fixture();p.bot=true;p.money=1000;p.pos=20;s.botPhase='build';s.botNext=0;
+ s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;s.tiles[16].owner=other.id;
+ e.invokeBotStep(s);assert(s.offer);assert.equal(s.offer.buyer,p.id);assert.equal(s.offer.seller,other.id);assert.equal(s.offer.index,16);assert(s.offer.botDeadline>Date.now());assert.equal(s.tiles[16].owner,other.id);
+});
+test('seeded multi-bot games keep decisions legal through auctions, debt, trade and construction',()=>{
+ for(const seed of [7123,9187]){
+  let random=seed;const e=engine(()=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return random/4294967296});
+  const players=[e.newPlayer('Expert'),e.newPlayer('Ultime'),e.newPlayer('Normal')];players.forEach((p,i)=>{p.id='p'+i;p.botLevel=['expert','ultimate','normal'][i]});
+  const s={phase:'lobby',host:players[0].id,players,tiles:e.newTiles(),log:[],events:[],eventSeq:0,debts:[],offer:null,turn:0};
+  e.invokeGameAction(s,players[0],{type:'start'});players.forEach(p=>p.bot=true);
+  for(let step=0;step<800&&s.phase!=='finished';step++){
+   s.botNext=0;if(s.auction)s.auction.deadline=Date.now()+1000;
+   e.invokeBotStep(s);
+   for(const t of s.tiles){assert(t.level>=0&&t.level<=5);assert(!t.owner||players.some(p=>p.id===t.owner));}
+   for(const p of players)assert(p.money>=0&&Number.isFinite(p.money));
+  }
+  assert(s.eventSeq>50,'the simulation must progress beyond the opening rolls');
+  assert(s.tiles.filter(t=>t.owner).length>=3,'bots must make real acquisitions');
+ }
+});
+
+test('a trade between other players does not skip the current bot purchase decision',()=>{
+ const {e,p,other,s}=fixture();p.bot=true;s.botPhase='buy';const buyer=e.newPlayer('Acheteur');buyer.id='c';s.players.push(buyer);s.tiles[1].owner=other.id;
+ e.invokeGameAction(s,buyer,{type:'offer',index:1,amount:100});e.invokeGameAction(s,other,{type:'acceptoffer'});
+ assert.equal(s.botPhase,'buy');assert.equal(s.tiles[1].owner,buyer.id);
 });

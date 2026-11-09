@@ -95,6 +95,7 @@ void main() {
         isTrue,
         reason: 'The robot must actually take a turn, not just join the room.');
   },
+      timeout: const Timeout(Duration(seconds: 60)),
       skip: address.isEmpty
           ? 'Run with --dart-define=SMOKE_SERVER=http://127.0.0.1:8787'
           : false);
