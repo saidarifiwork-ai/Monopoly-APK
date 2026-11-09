@@ -72,6 +72,10 @@ var fps_label: Label
 var fps_clock := 0.0
 var last_label_region := -1
 var map_overview := false
+var cinematic_blend := 0.0
+var camera_transition: Tween
+var camera_policy := ""
+var camera_request := 0
 var follow_anchor := Vector3.ZERO
 var follow_anchor_valid := false
 var follow_angle := 0.65
@@ -306,6 +310,7 @@ func build_world() -> void:
 	for i in range(2):
 		var die := Node3D.new()
 		die.position = dice_center_position(i)
+		die.scale = Vector3.ONE * 0.6
 		add_child(die)
 		var die_model: PackedScene = load("res://assets/user_models/de-lisse.glb")
 		var shape := die_model.instantiate() as Node3D
@@ -513,12 +518,17 @@ func set_board_focus(enabled: bool) -> void:
 	if focused_board == enabled:
 		return
 	focused_board = enabled
-	map_overview = false
+	map_overview = true
+	camera_policy = ""
+	camera_request += 1
+	if camera_transition != null and camera_transition.is_running():
+		camera_transition.kill()
+	cinematic_blend = 0.0
 	follow_anchor_valid = false
 	last_label_region = -1
 	if not enabled:
 		show_nearby_labels(-1)
-	view_distance = 7.8 if enabled else 18.5
+	view_distance = 14.7 if enabled else 18.5
 	focus_overlay.visible = enabled and quality_blur
 	if main_panel != null:
 		main_panel.visible = not enabled
@@ -528,27 +538,61 @@ func set_board_focus(enabled: bool) -> void:
 		context_button.visible = enabled
 	if map_button != null:
 		map_button.visible = enabled
-		map_button.text = "Voir tout le plateau"
+		map_button.text = "Suivre mon pion"
 	update_camera()
 
 func toggle_map_view() -> void:
+	if focused_board:
+		camera_request += 1
+		set_camera_view(not map_overview, true)
+
+func set_camera_view(overview: bool, animated: bool) -> void:
+	map_overview = overview
+	if camera_transition != null and camera_transition.is_running():
+		camera_transition.kill()
+	var distance := 14.7 if overview else 7.8
+	var blend := 0.0 if overview else 1.0
+	map_button.text = "Suivre mon pion" if overview else "Voir tout le plateau"
+	show_nearby_labels(-1)
+	if animated:
+		camera_transition = create_tween().set_parallel(true)
+		camera_transition.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		camera_transition.tween_property(self, "view_distance", distance, 0.7)
+		camera_transition.tween_property(self, "cinematic_blend", blend, 0.7)
+	else:
+		view_distance = distance
+		cinematic_blend = blend
+	update_camera()
+
+func sync_turn_camera(players: Array, me: String, phase: String, current: Dictionary, events: Array) -> void:
 	if not focused_board:
 		return
-	map_overview = not map_overview
-	view_distance = 14.7 if map_overview else 7.8
-	follow_anchor_valid = false
-	last_label_region = -1
-	if map_overview:
-		show_nearby_labels(-1)
-	map_button.text = "Suivre mon pion" if map_overview else "Voir tout le plateau"
-	update_camera()
+	var mine: Dictionary = {}
+	for player in players:
+		if str(player.id) == me:
+			mine = player
+	var follow: bool = phase == "playing" and str(current.get("id", "")) == me and state.get("rolled", false) and not mine.get("autoPlay", false) and not mine.get("out", false)
+	var policy := phase + ":" + str(state.get("gameRound", 0)) + ":" + str(current.get("id", "")) + (":follow" if follow else ":overview")
+	if policy == camera_policy:
+		return
+	camera_policy = policy
+	camera_request += 1
+	var request := camera_request
+	if follow and events.any(func(event): return event.get("type", "") == "dice"):
+		# Watch the dice in the wide view before moving with the pawn.
+		set_camera_view(true, true)
+		get_tree().create_timer(0.6).timeout.connect(func():
+			if request == camera_request and focused_board:
+				set_camera_view(false, true))
+	else:
+		set_camera_view(not follow, true)
 
 func _process(delta: float) -> void:
 	fps_clock += delta
 	if fps_label != null and fps_clock >= 0.5:
 		fps_label.text = "Fluidité : " + str(Engine.get_frames_per_second()) + " FPS"
 		fps_clock = 0.0
-	if not focused_board or map_overview or camera == null:
+	if not focused_board or camera == null:
 		return
 	var my_id := str(state.get("me", ""))
 	if not pawns.has(my_id) or not is_instance_valid(pawns[my_id]):
@@ -584,9 +628,10 @@ func show_nearby_labels(index: int) -> void:
 
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
-	var following := focused_board and not map_overview and follow_anchor_valid
-	var angle := follow_angle + follow_orbit_offset if following else view_angle
-	var target := follow_anchor if following else Vector3.ZERO
+	var following := focused_board and follow_anchor_valid
+	var blend := cinematic_blend if following else 0.0
+	var angle := lerp_angle(view_angle, follow_angle + follow_orbit_offset, blend) if following else view_angle
+	var target := follow_anchor * blend if following else Vector3.ZERO
 	target.y = 0.0
 	# Shift the board into the space left of the controls.
 	if following:
@@ -970,7 +1015,8 @@ func send_action(kind: String, fields: Dictionary = {}) -> void:
 	refresh()
 
 func dice_center_position(index: int) -> Vector3:
-	return Vector3((index - 0.5) * 0.78, 0.35, 0.8)
+	# Lower-left dice tray inside the centre, away from the diagonal logo.
+	return Vector3(-1.2 + (index - 0.5) * 0.5, 0.21, 3.0)
 
 func update_die_sides(index: int, top_value: int) -> void:
 	var patterns := [[4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]]
@@ -1039,7 +1085,7 @@ func update_state() -> void:
 			var die := dice_nodes[i]
 			var destination := dice_center_position(i)
 			# Both the throw and the result stay on the central playing area.
-			die.position = destination + Vector3(-0.65, 1.15, -0.8)
+			die.position = destination + Vector3(-0.35, 0.65, -0.4)
 			die.rotation = Vector3.ZERO
 			var spin := create_tween().set_parallel(true)
 			spin.tween_method(animate_die_throw.bind(die, die.position, destination), 0.0, 1.0, 0.5)
@@ -1065,6 +1111,17 @@ func update_state() -> void:
 				figure.position.y = 0.08
 				figure.scale = Vector3.ONE * 0.65
 				pawn.add_child(figure)
+			var name_tag := Label3D.new()
+			name_tag.name = "NomJoueur"
+			name_tag.text = str(player.name)
+			name_tag.position.y = 0.68 + i * 0.22
+			name_tag.font_size = 32
+			name_tag.pixel_size = 0.006
+			name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			name_tag.modulate = COLORS[i % COLORS.size()]
+			name_tag.outline_size = 5
+			name_tag.outline_modulate = Color("fff9e9")
+			pawn.add_child(name_tag)
 			pawns[player.id] = pawn
 		else:
 			pawn = pawns[player.id]
@@ -1079,6 +1136,8 @@ func update_state() -> void:
 				pawn_tweens[player.id].kill()
 			var movement := create_tween()
 			pawn_tweens[player.id] = movement
+			if new_events.any(func(event): return event.get("type", "") == "dice"):
+				movement.tween_interval(0.6)
 			var previous: Vector3 = pawn.position
 			for square in path:
 				var destination: Vector3 = tile_position(int(square)) + offset
@@ -1086,6 +1145,7 @@ func update_state() -> void:
 				previous = destination
 		elif is_new or not pawn_tweens.has(player.id) or not pawn_tweens[player.id].is_running():
 			pawn.position = tile_position(int(player.pos)) + offset
+	sync_turn_camera(players, me, phase, current, new_events)
 	var can_roll: bool = phase in ["opening", "playing"] and str(current.get("id", "")) == me and not mine.get("out", false) and not mine.get("autoPlay", false) and state.get("auction") == null and state.get("offer") == null and state.get("debts", []).is_empty()
 	if phase == "playing" and state.get("rolled", false):
 		can_roll = false

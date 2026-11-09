@@ -85,6 +85,10 @@ func run() -> void:
 	if scene.focused_board or scene.focus_overlay.visible or scene.view_distance != 18.5:
 		fail("vue générale pendant le salon")
 		return
+	for player in scene.state.players:
+		if scene.pawns[player.id].get_node("NomJoueur").text != player.name:
+			fail("identifier les pions des amis")
+			return
 	if scene.pawns.size() != 2 or not has_button(scene, "Commencer"):
 		fail("pions et commandes du salon")
 		return
@@ -96,8 +100,8 @@ func run() -> void:
 	scene.state = snapshot.data
 	scene.update_state()
 	await process_frame
-	if not scene.focused_board or scene.focus_overlay.visible or scene.view_distance != 7.8:
-		fail("plateau agrandi en mode performance")
+	if not scene.focused_board or scene.focus_overlay.visible or not scene.map_overview:
+		fail("vue générale avant le lancer")
 		return
 	await process_frame
 	if not is_equal_approx(root.scaling_3d_scale, 1.0) or not scene.labels[20].visible:
@@ -108,6 +112,8 @@ func run() -> void:
 		fail("activation du flou facultatif")
 		return
 	scene.quality_control.button_pressed = false
+	scene.map_button.pressed.emit()
+	await create_timer(0.8).timeout
 	var pawn_screen: Vector2 = scene.camera.unproject_position(scene.pawns[scene.state.me].position)
 	var centre_screen: Vector2 = scene.camera.unproject_position(Vector3.ZERO)
 	var viewport_size: Vector2 = root.get_visible_rect().size
@@ -118,13 +124,13 @@ func run() -> void:
 		fail("caméra qui suit le pion")
 		return
 	scene.map_button.pressed.emit()
-	if not scene.map_overview or scene.view_distance != 14.7 or scene.map_button.text != "Suivre mon pion" or not scene.labels[20].visible:
+	await create_timer(0.8).timeout
+	if not scene.map_overview or not is_equal_approx(scene.view_distance, 14.7) or scene.map_button.text != "Suivre mon pion" or not scene.labels[20].visible:
 		fail("bouton pour voir tout le plateau")
 		return
 	scene.map_button.pressed.emit()
-	await process_frame
-	await process_frame
-	if scene.map_overview or scene.view_distance != 7.8 or not scene.follow_anchor_valid:
+	await create_timer(0.8).timeout
+	if scene.map_overview or not is_equal_approx(scene.view_distance, 7.8) or not scene.follow_anchor_valid:
 		fail("retour au suivi du pion")
 		return
 	scene.view_distance = 13.0
@@ -174,13 +180,19 @@ func run() -> void:
 	scene.state = sample
 	scene.update_state()
 	for die in scene.dice_nodes:
-		if absf(die.position.x) > 2.0 or absf(die.position.z) > 2.0:
+		if absf(die.position.x) > 4.0 or absf(die.position.z) > 4.0:
 			fail("le lancer doit démarrer dans la zone centrale")
 			return
 	if not scene.roll_button.disabled or scene.main_panel.visible:
 		fail("bouton de lancer désactivé et panneau fermé après le lancer")
 		return
-	await create_timer(0.6).timeout
+	if not scene.map_overview:
+		fail("vue générale maintenue pendant le lancer")
+		return
+	await create_timer(1.5).timeout
+	if scene.map_overview or not is_equal_approx(scene.cinematic_blend, 1.0):
+		fail("zoom cinématique après le lancer")
+		return
 	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.12, 0)
 	if scene.follow_anchor.distance_to(expected) > 0.6:
 		fail("la caméra suit le pion en déplacement")
@@ -199,6 +211,24 @@ func run() -> void:
 	if scene.context_button.disabled or scene.context_kind != "buy":
 		fail("achat disponible après arrivée sur une propriété libre")
 		return
+	if scene.map_overview:
+		fail("garder le cadrage rapproché pendant le choix d’achat")
+		return
+	var friend_turn: Dictionary = purchase.duplicate(true)
+	friend_turn.turn = 1
+	scene.state = friend_turn
+	scene.update_state()
+	await create_timer(0.8).timeout
+	if not scene.map_overview or not is_equal_approx(scene.cinematic_blend, 0.0):
+		fail("vue générale pendant le tour de l’ami")
+		return
+	var next_turn: Dictionary = purchase.duplicate(true)
+	next_turn.rolled = false
+	scene.state = next_turn
+	scene.update_state()
+	if not scene.map_overview:
+		fail("vue générale au début du prochain tour")
+		return
 	scene.state = sample
 	scene.update_state()
 	var building: Dictionary = sample.duplicate(true)
@@ -215,6 +245,10 @@ func run() -> void:
 	scene.selected_tile = 2
 	scene.update_state()
 	for die_index in range(2):
+		var die_position: Vector3 = scene.dice_nodes[die_index].position
+		if die_position.x + die_position.z < 1.2 or scene.dice_nodes[die_index].scale.x > 0.65:
+			fail("dés réduits hors du logo")
+			return
 		if scene.dice_nodes[die_index].position.distance_to(scene.dice_center_position(die_index)) > 0.01:
 			fail("les dés doivent s’arrêter au centre du plateau")
 			return
