@@ -5,6 +5,7 @@ const fs = require('fs');
 const presence = require('./presence');
 const auction = require('./auction');
 const botAI = require('./bot-ai');
+const {shuffle} = require('./cards');
 const BOT_ACTION = Symbol('bot action');
 
 const app = express();
@@ -292,8 +293,6 @@ function newCardDecks() {
         newCard('Heritage familial', 'Recevez un heritage de 100 DH.', 'cash', 100)
     ];
     
-    const shuffle = arr => arr.sort(() => Math.random() - 0.5);
-    
     return {
         chance: shuffle(chance),
         chest: shuffle(chest)
@@ -436,6 +435,7 @@ function nextTurn(s) {
 }
 
 function startOpening(s) {
+    s.decks = newCardDecks();
     s.phase = 'opening';
     s.turn = 0;
     s.rolled = false;
@@ -1124,7 +1124,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 13, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 14, cardShuffle: 2, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {
