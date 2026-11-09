@@ -431,11 +431,20 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                         : (value) =>
                             setState(() => botLevel = value ?? 'normal'),
                   ),
+                  if (botLevel == 'ultimate')
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                          'Toi contre deux robots indépendants : chacun joue pour lui.',
+                          style: TextStyle(color: ink)),
+                    ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: c.busy ? null : () => enter(solo: true),
                     icon: const Icon(Icons.smart_toy_outlined),
-                    label: const Text('Jouer contre le robot'),
+                    label: Text(botLevel == 'ultimate'
+                        ? 'Affronter deux robots Ultime'
+                        : 'Jouer contre le robot'),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(

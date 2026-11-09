@@ -1025,10 +1025,7 @@ function invokeBotStep(s) {
     s.botNext = Date.now() + 1800;
     
     if (!s.rolled) {
-        let type = 'roll';
-        if (p.jail && p.jailCards.length > 0) {
-            type = 'usejail';
-        }
+        const type = botAI.jailDecision(s, p);
         invokeGameAction(s, p, {[BOT_ACTION]: true, type});
         return;
     }
@@ -1085,7 +1082,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 11, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 12, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {
@@ -1125,7 +1122,8 @@ app.post('/api/create', (req, res) => {
         rooms.set(code, s);
         
         if (req.body.mode === 'solo') {
-            invokeGameAction(s, p, {type: 'addbot'});
+            const count = botLevel === 'ultimate' ? 2 : 1;
+            for (let i = 0; i < count; i++) invokeGameAction(s, p, {type: 'addbot'});
             invokeGameAction(s, p, {type: 'start'});
         }
         

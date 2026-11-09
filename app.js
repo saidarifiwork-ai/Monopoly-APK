@@ -179,6 +179,7 @@ function render(){
  if(s.phase==='opening'){$('#turn').textContent=current.name+' · tirage de l’ordre';if(!animating)announce('Tirage de l’ordre · '+(current.id===s.me?'à vous de lancer les dés !':current.name+' va lancer les dés.'),current.id);return}
  if(!animating)announce(s.phase==='lobby'?'Le salon est prêt. Invitez vos amis ou ajoutez un robot.':s.phase==='finished'?'🏆 '+current.name+' remporte la partie !':current.id===s.me?(s.rolled?'À vous : achetez, construisez ou terminez votre tour.':'À vous de lancer les dés !'):current.bot?'🤖 '+current.name+' prépare son prochain coup…':current.name+' joue.',current.id);
 }
+$('#bot-level').onchange=()=>{const ultimate=$('#bot-level').value==='ultimate';$('#solo').textContent=ultimate?'Affronter deux robots Ultime →':'Jouer contre le robot →';$('.bot-help').textContent=ultimate?'Toi contre deux robots indépendants : chacun joue pour lui.':'Même argent, mêmes règles et mêmes dés pour tous.'};
 $('#solo').onclick=()=>enter(true,'solo');$('#create').onclick=()=>enter(true);$('#entry').onsubmit=e=>{e.preventDefault();enter(false)};$('#code').value=new URLSearchParams(location.search).get('room')||'';
 const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session;$('#entry').prepend(resumeButton);
 resumeButton.onclick=()=>{suspended=false;localStorage.removeItem('quartiers-paused');poll(true)};

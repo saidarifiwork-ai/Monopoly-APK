@@ -60,14 +60,21 @@ void main() {
         data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'ultimate'});
     s = await state(solo);
     expect(s.phase, 'opening');
-    expect(s.players.where((p) => p['bot'] == true).length, 1);
+    expect(s.players.where((p) => p['bot'] == true).length, 2);
+    expect(
+        s.players
+            .where((p) => p['bot'] == true)
+            .every((p) => p['botLevel'] == 'ultimate'),
+        isTrue);
     expect(
         s.players.firstWhere((p) => p['bot'] == true)['botLevel'], 'ultimate');
-    final bot = s.players.firstWhere((p) => p['bot'] == true)['id'];
+    final bots =
+        s.players.where((p) => p['bot'] == true).map((p) => p['id']).toSet();
     final deadline = DateTime.now().add(const Duration(seconds: 35));
     while (DateTime.now().isBefore(deadline)) {
       s = await state(solo);
-      if (s.events.any((e) => e['type'] == 'move' && e['playerId'] == bot)) {
+      if (s.events
+          .any((e) => e['type'] == 'move' && bots.contains(e['playerId']))) {
         break;
       }
       final auction = s.json['auction'];
@@ -82,7 +89,9 @@ void main() {
       }
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
-    expect(s.events.any((e) => e['type'] == 'move' && e['playerId'] == bot),
+    expect(
+        s.events
+            .any((e) => e['type'] == 'move' && bots.contains(e['playerId'])),
         isTrue,
         reason: 'The robot must actually take a turn, not just join the room.');
   },

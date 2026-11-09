@@ -41,9 +41,42 @@ function value(s,p,t,selling=false) {
  else if(t.kind==='utility')worth*=s.tiles.some(x=>x!==t&&x.kind==='utility'&&x.owner===p.id)?1.3:.8;
  return Math.ceil(worth);
 }
-function bidLimit(s,p,t) {return Math.max(0,Math.min(Math.floor(p.money-reserve(s,p)),value(s,p,t)));}
+function completesGroup(s,p,t) {
+ const g=group(s,t);return g.length>0&&t.owner!==p.id&&g.every(x=>x===t||x.owner===p.id);
+}
+function investmentReserve(s,p,t) {
+ const required=reserve(s,p);
+ // Spending on the last missing city can be worth a smaller idle-cash buffer.
+ return profile(p).skill>=4&&completesGroup(s,p,t)?Math.ceil(profile(p).reserve*.4+Math.max(0,required-profile(p).reserve)):required;
+}
+function jailDecision(s,p) {
+ const card=(p.jailCards||[]).length>0;
+ if(!p.jail)return 'roll';
+ if(profile(p).skill<4)return card?'usejail':'roll';
+ const fee=card?0:50;
+ if(p.money<fee)return card?'usejail':'roll';
+ if((p.jailTurns||0)>=2)return card?'usejail':'roll';
+ let danger=0, opportunity=0, completion=0, reachable=0;
+ for(let n=2;n<=12;n++) {
+  const t=s.tiles[((p.pos||10)+n)%s.tiles.length];
+  const probability=(6-Math.abs(7-n))/36;
+  if(t.owner&&t.owner!==p.id)danger+=rent(s,t)*probability;
+  if(t.price>0&&!t.owner&&p.money-fee-t.price>=investmentReserve(s,p,t)) {
+   reachable++;
+   opportunity+=Math.max(t.price*.15,value(s,p,t)-t.price)*probability;
+   if(completesGroup(s,p,t))completion+=value(s,p,t)*probability;
+  }
+ }
+ const open=s.tiles.filter(t=>t.price>0&&!t.owner).length;
+ const canInvest=p.money-fee>=profile(p).reserve;
+ const completionWorthwhile=completion>0&&danger<Math.max(100,completion*2);
+ const expanding=open>=5&&reachable>0&&canInvest&&danger<Math.max(40,opportunity*2);
+ const profitable=opportunity>fee+danger;
+ return completionWorthwhile||expanding||profitable?(card?'usejail':'payjail'):'roll';
+}
+function bidLimit(s,p,t) {return Math.max(0,Math.min(Math.floor(p.money-investmentReserve(s,p,t)),value(s,p,t)));}
 function shouldBuy(s,p,t,rng=Math.random) {
- return p.money-t.price>=reserve(s,p)&&(profile(p).skill<3||value(s,p,t)>=t.price)&&rng()<profile(p).buyChance;
+ return p.money-t.price>=investmentReserve(s,p,t)&&(profile(p).skill<3||value(s,p,t)>=t.price)&&rng()<profile(p).buyChance;
 }
 function buildIndex(s,p) {
  if(!profile(p).builds)return -1;
@@ -86,4 +119,4 @@ function tradeDecision(s,p,o) {
  const amount=selling?fair:Math.min(fair,Math.max(0,p.money-reserve(s,p)));
  return amount>0?{type:'counteroffer',amount:Math.floor(amount)}:{type:'rejectoffer'};
 }
-module.exports={LEVELS,normalize,profile,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision};
+module.exports={LEVELS,normalize,profile,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision,jailDecision,investmentReserve};
