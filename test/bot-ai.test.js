@@ -99,3 +99,38 @@ test('a trade between other players does not skip the current bot purchase decis
  e.invokeGameAction(s,buyer,{type:'offer',index:1,amount:100});e.invokeGameAction(s,other,{type:'acceptoffer'});
  assert.equal(s.botPhase,'buy');assert.equal(s.tiles[1].owner,buyer.id);
 });
+
+test('human auto and disconnected replacements always reject even a generous offer',()=>{
+ for(const flags of [{autoPlay:true,temporaryBot:true},{temporaryBot:true}]){
+  const {e,p,other,s}=fixture();p.bot=true;Object.assign(p,flags);s.tiles[1].owner=p.id;
+  assert.deepEqual(ai.tradeDecision(s,p,{index:1,seller:p.id,buyer:other.id,amount:100000,offered:[]}),{type:'rejectoffer'});
+  const before=[p.money,other.money];e.invokeGameAction(s,other,{type:'offer',index:1,amount:1000});
+  assert.equal(s.offer,null);assert.equal(s.tiles[1].owner,p.id);assert.deepEqual([p.money,other.money],before);
+  assert.equal(s.events.at(-1).type,'offer-rejected');
+ }
+});
+test('pending sales and purchases are refused when either participant goes auto, including an incoming counteroffer',()=>{
+ for(const absentRole of ['buyer','seller'])for(const action of ['acceptoffer','counteroffer']){
+  const {e,p,other,s}=fixture();s.tiles[1].owner=other.id;
+  e.invokeGameAction(s,p,{type:'offer',index:1,amount:100});
+  const absent=absentRole==='buyer'?p:other;absent.bot=true;absent.temporaryBot=true;
+  const cash=[p.money,other.money];e.invokeGameAction(s,other,{type:action,amount:150});
+  assert.equal(s.offer,null);assert.equal(s.tiles[1].owner,other.id);assert.deepEqual([p.money,other.money],cash);
+ }
+});
+test('the background bot refuses a pending negotiation even when the absent player is waiting for the other response',()=>{
+ const {e,p,other,s}=fixture();s.tiles[1].owner=other.id;e.invokeGameAction(s,p,{type:'offer',index:1,amount:100});
+ p.bot=true;p.temporaryBot=true;e.invokeBotStep(s);assert.equal(s.offer,null);assert.equal(s.tiles[1].owner,other.id);
+});
+test('replacements neither initiate offers nor receive targeted offers from permanent advanced bots',()=>{
+ const {p,other,s}=fixture();s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;s.tiles[16].owner=other.id;
+ assert(ai.offerPlan(s,p));p.temporaryBot=true;assert.equal(ai.offerPlan(s,p),null);
+ delete p.temporaryBot;other.temporaryBot=true;assert.equal(ai.offerPlan(s,p),null);
+});
+test('normal trade is available after a human takes back control, while permanent bots retain their strategy',()=>{
+ const presence=require('../presence');const {e,p,other,s}=fixture();s.tiles[1].owner=other.id;
+ p.bot=true;p.temporaryBot=true;presence.touch(s,p,1000);assert(!p.bot);
+ e.invokeGameAction(s,p,{type:'offer',index:1,amount:100});e.invokeGameAction(s,other,{type:'acceptoffer'});assert.equal(s.tiles[1].owner,p.id);
+ other.bot=true;other.botLevel='ultimate';s.tiles[3].owner=other.id;
+ assert.equal(ai.tradeDecision(s,other,{index:3,seller:other.id,buyer:p.id,amount:10000,offered:[]}).type,'acceptoffer');
+});

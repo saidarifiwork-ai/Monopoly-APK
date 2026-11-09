@@ -69,3 +69,19 @@ validées par le serveur que les humains.
 
 Ces changements sont exécutés sur le serveur : l’APK v1.0.13 reste compatible,
 sans réinstallation pour cette évolution de la stratégie.
+
+## Protection des joueurs humains en mode auto
+
+Quand un robot remplace un humain (`autoPlay` ou `temporaryBot`), il refuse
+systématiquement les offres et ne propose pas de négociations à sa place.
+Cette protection s’applique aussi après une déconnexion ou un départ volontaire.
+
+Le serveur refuse immédiatement une nouvelle offre impliquant ce joueur. Une
+négociation déjà en attente est également refusée si l’un des participants passe
+en auto, même si l’autre participant tente ensuite d’accepter ou de contre-proposer.
+Aucun argent ni bien n’est transféré dans ce cas. Les achats à la banque,
+constructions et décisions courantes du mode auto ne sont pas modifiés.
+
+Dès que l’humain reprend le contrôle, il peut à nouveau négocier lui-même.
+Les robots adversaires permanents continuent d’utiliser leurs stratégies d’échange.
+Cette règle côté serveur est commune au web, à l’APK et au PC, sans nouvelle APK.

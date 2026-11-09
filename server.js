@@ -576,6 +576,12 @@ function invokeTradeAction(s, p, data) {
         const offered = data.offered || [];
         validateOfferedTiles(s, p.id, offered);
         
+        const recipient = s.players.find(x => x.id === t.owner);
+        const absent = [p, recipient].find(botAI.protectsHumanAssets);
+        if (absent) {
+            announce(s, absent, absent.name + ' est en mode auto : offre refusée.', 'offer-rejected');
+            return;
+        }
         s.offer = {
             index: data.index,
             buyer: p.id,
@@ -599,6 +605,13 @@ function invokeTradeAction(s, p, data) {
         return;
     }
     
+    const absent = s.players.find(x => [o.buyer, o.seller].includes(x.id) && botAI.protectsHumanAssets(x));
+    if (absent) {
+        s.offer = null;
+        announce(s, absent, absent.name + ' est en mode auto : offre refusée.', 'offer-rejected');
+        return;
+    }
+
     if (p.id !== o.respondent) throw new Error('Attendez la reponse de votre partenaire.');
     
     if (data.type === 'rejectoffer') {
@@ -990,6 +1003,14 @@ function invokeDebtBot(s) {
 }
 
 function invokeBotStep(s) {
+    if (s.offer) {
+        const absent = s.players.find(x => [s.offer.buyer, s.offer.seller].includes(x.id) && botAI.protectsHumanAssets(x));
+        if (absent) {
+            s.offer = null;
+            announce(s, absent, absent.name + ' est en mode auto : offre refusée.', 'offer-rejected');
+            return;
+        }
+    }
     if (s.offer?.botInitiated && Date.now() >= s.offer.botDeadline) {
         s.offer = null;
         addLog(s, 'L’offre du robot a expiré. La partie reprend.');
@@ -1124,7 +1145,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 14, cardShuffle: 2, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 15, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {

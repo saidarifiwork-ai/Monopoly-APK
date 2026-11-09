@@ -7,6 +7,7 @@ const LEVELS = [
  {id:'expert',name:'Expert',reserve:220,buyChance:1,bid:1.25,builds:3,skill:4},
  {id:'ultimate',name:'Ultime',reserve:250,buyChance:1,bid:1.4,builds:5,skill:5}
 ];
+function protectsHumanAssets(p) {return !!(p && (p.temporaryBot || p.autoPlay));}
 function normalize(id='normal') {if (!LEVELS.some(l=>l.id===id)) throw Error('Niveau de robot invalide.');return id;}
 function profile(p) {return LEVELS.find(l=>l.id===p.botLevel)||LEVELS[2];}
 function group(s,t) {return t.kind==='property'?s.tiles.filter(x=>x.kind==='property'&&x.group===t.group):[];}
@@ -156,11 +157,11 @@ function tradeValues(s,p,o) {
  return {fair:Math.ceil(p.id===o.seller?Math.max(0,-ownDelta+danger):Math.max(0,ownDelta-danger)),after};
 }
 function offerPlan(s,p,now=Date.now()) {
- if(profile(p).skill<4||s.offer||s.auction||s.debts?.length||p.money<100||now-(p.lastBotOfferAt??-Infinity)<120000)return null;
+ if(protectsHumanAssets(p)||profile(p).skill<4||s.offer||s.auction||s.debts?.length||p.money<100||now-(p.lastBotOfferAt??-Infinity)<120000)return null;
  let best=null;
  for(let i=0;i<s.tiles.length;i++){
   const t=s.tiles[i],seller=s.players.find(x=>x.id===t.owner);
-  if(!seller||seller.out||seller.id===p.id||t.mortgaged||!completesGroup(s,p,t)||group(s,t).some(x=>x.level>0))continue;
+  if(!seller||seller.out||protectsHumanAssets(seller)||seller.id===p.id||t.mortgaged||!completesGroup(s,p,t)||group(s,t).some(x=>x.level>0))continue;
   const spares=s.tiles.map((x,j)=>({x,j})).filter(({x})=>x.owner===p.id&&!x.mortgaged&&x.price>0&&x.group!==t.group&&(!group(s,x).length||group(s,x).some(y=>y.owner!==p.id))&&group(s,x).every(y=>!y.level)).sort((a,b)=>value(s,seller,b.x)-value(s,seller,a.x)).slice(0,2);
   for(const offered of [[],...spares.map(x=>[x.j])]){
    const proposed={index:i,buyer:p.id,seller:seller.id,offered};const estimate=tradeValues(s,p,proposed);
@@ -191,6 +192,7 @@ function debtAction(s,p) {
  return first||(sale[0]?{type:'sellhouse',index:sale[0].i}:mortgages[0]?{type:'mortgage',index:mortgages[0].i}:{type:'bankrupt'});
 }
 function tradeDecision(s,p,o) {
+ if(protectsHumanAssets(p))return {type:'rejectoffer'};
  if(profile(p).skill>=4){
   const {fair,after}=tradeValues(s,p,o);const selling=p.id===o.seller;
   const affordable=selling||p.money-o.amount>=reserve(after,p);
@@ -210,4 +212,4 @@ function tradeDecision(s,p,o) {
  const amount=selling?fair:Math.min(fair,Math.max(0,p.money-reserve(s,p)));
  return amount>0?{type:'counteroffer',amount:Math.floor(amount)}:{type:'rejectoffer'};
 }
-module.exports={LEVELS,normalize,profile,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision,jailDecision,investmentReserve,landingWeights,investmentAction,offerPlan,tradeValues};
+module.exports={protectsHumanAssets,LEVELS,normalize,profile,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision,jailDecision,investmentReserve,landingWeights,investmentAction,offerPlan,tradeValues};
