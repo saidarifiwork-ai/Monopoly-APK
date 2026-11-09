@@ -1,7 +1,7 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const ai=require('../bot-ai');
-function engine(){const sandbox={__dirname:path.resolve(__dirname,'..'),require(name){if(name==='express'){const express=require('express');return Object.assign(()=>{const app=express();app.listen=()=>{};return app},express)}if(name==='fs')return {existsSync:()=>false,writeFileSync:()=>{}};return require(name.startsWith('.')?path.resolve(__dirname,'..',name):name)},process:{env:{}},console,setInterval:()=>({unref(){}})};vm.createContext(sandbox);vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.e={newTiles,newPlayer,invokeGameAction,invokeBotStep};',sandbox);return sandbox.e;}
+function engine(rng){const sandbox={Math:Object.assign(Object.create(Math),{random:rng||Math.random}),__dirname:path.resolve(__dirname,'..'),require(name){if(name==='express'){const express=require('express');return Object.assign(()=>{const app=express();app.listen=()=>{};return app},express)}if(name==='fs')return {existsSync:()=>false,writeFileSync:()=>{}};return require(name.startsWith('.')?path.resolve(__dirname,'..',name):name)},process:{env:{}},console,setInterval:()=>({unref(){}})};vm.createContext(sandbox);vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.e={newTiles,newPlayer,invokeGameAction,invokeBotStep};',sandbox);return sandbox.e;}
 function fixture(level='ultimate'){const e=engine();const p=e.newPlayer('Robot'),other=e.newPlayer('Ami');p.id='a';other.id='b';p.botLevel=level;const s={phase:'playing',turn:0,rolled:true,players:[p,other],tiles:e.newTiles(),debts:[],offer:null,log:[],events:[],eventSeq:0,dice:[3,4],host:p.id,botPhase:'buy'};return {e,p,other,s};}
 test('six valid levels; unknown levels rejected and old robots default to Normal',()=>{assert.equal(ai.LEVELS.length,6);for(const {id} of ai.LEVELS)assert.equal(ai.normalize(id),id);for(const id of [null,0,'Ultimate','bad',{}])assert.throws(()=>ai.normalize(id));assert.equal(ai.profile({}).id,'normal');});
 test('beginner can miss an affordable purchase; higher levels purchase deliberately',()=>{const {p,s}=fixture('beginner');assert.equal(ai.shouldBuy(s,p,s.tiles[1],()=>.9),false);p.botLevel='ultimate';assert.equal(ai.shouldBuy(s,p,s.tiles[1],()=>.9),true);});
@@ -14,3 +14,26 @@ test('host assigns each robot separately, rejects bad levels, and replay preserv
 test('every bot level performs real legal server actions without extra money or dice privileges',()=>{for(const {id} of ai.LEVELS){const {e,p,s}=fixture(id);p.bot=true;p.pos=1;const before=p.money;e.invokeBotStep(s);if(s.tiles[1].owner===p.id)assert.equal(p.money,before-60);for(let n=0;n<8&&s.turn===0;n++){s.botNext=0;e.invokeBotStep(s);}assert(s.players.every(x=>x.money>=0));assert(s.turn!==0||s.auction);}});
 
 test('advanced bots restore mortgaged assets only when cash reserves allow it',()=>{const {p,s}=fixture();s.tiles[1].owner=p.id;s.tiles[1].mortgaged=true;assert.equal(ai.unmortgageIndex(s,p),1);p.money=10;assert.equal(ai.unmortgageIndex(s,p),-1);p.money=1500;p.botLevel='beginner';assert.equal(ai.unmortgageIndex(s,p),-1);});
+
+test('Expert and Ultimate pay to leave jail when El Jadida completes Safi/Essaouira',()=>{
+ for(const level of ['expert','ultimate']){const {p,s}=fixture(level);p.pos=10;p.jail=true;p.money=1000;s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;
+ assert.equal(ai.jailDecision(s,p),'payjail');p.jailCards=[{deck:'chest',card:{}}];assert.equal(ai.jailDecision(s,p),'usejail');}
+});
+test('advanced prison strategy keeps cash when poor or when the next area is dangerous',()=>{
+ const {p,s,other}=fixture();p.pos=10;p.jail=true;p.money=20;assert.equal(ai.jailDecision(s,p),'roll');
+ p.money=1500;for(let i=12;i<=22;i++){s.tiles[i].owner=other.id;s.tiles[i].mortgaged=false;s.tiles[i].kind='property';s.tiles[i].level=5;s.tiles[i].rents=[10,20,100,400,800,2000];}
+ assert.equal(ai.jailDecision(s,p),'roll');p.jailCards=[{deck:'chest',card:{}}];assert.equal(ai.jailDecision(s,p),'roll');
+});
+test('group completion permits a flexible reserve, without buying beyond the cash available',()=>{
+ const {p,s}=fixture('expert');p.money=300;s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;assert(ai.shouldBuy(s,p,s.tiles[16],()=>0));p.money=179;assert(!ai.shouldBuy(s,p,s.tiles[16],()=>0));
+});
+test('the bot uses the real payjail action and pays exactly 50 before moving',()=>{
+ const e=engine(()=>0),p=e.newPlayer('Robot'),other=e.newPlayer('Ami');p.id='a';other.id='b';p.bot=true;p.botLevel='ultimate';p.pos=10;p.jail=true;p.money=1000;
+ const s={phase:'playing',turn:0,rolled:false,players:[p,other],tiles:e.newTiles(),debts:[],offer:null,log:[],events:[],eventSeq:0,dice:[3,4],host:p.id,botNext:0};s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;e.invokeBotStep(s);assert(!p.jail);assert.equal(p.money,950);assert.equal(p.pos,12);assert.deepEqual(Array.from(s.dice),[1,1]);
+});
+test('two Ultimate opponents compete with each other and never pool their cash',()=>{
+ const auction=require('../auction');const s={phase:'playing',turn:0,rolled:true,offer:null,debts:[],players:[{id:'human',pos:0,money:0},{id:'one',pos:0,money:1000,bot:true,botLevel:'ultimate'},{id:'two',pos:0,money:1000,bot:true,botLevel:'ultimate'}],tiles:[{name:'Test',price:200,kind:'property',group:0,owner:''}]};
+ auction.start(s,s.players[0],0);const bidding=new Set();for(let n=1;s.auction&&n<300;n++){const who=s.auction.respondent,before=s.auction.amount;auction.tick(s,n*500);if(!s.auction||s.auction.amount>before)bidding.add(who);}
+ assert(!s.auction);assert(bidding.has('one')&&bidding.has('two'));const winner=s.players.find(p=>p.id===s.tiles[0].owner);assert(winner&&winner.money<1000);const loser=s.players.find(p=>p.bot&&p!==winner);assert.equal(loser.money,1000);
+ const {p,s:room,other}=fixture();room.tiles[3].owner=other.id;const againstHuman=ai.value(room,p,room.tiles[1]);other.bot=true;other.botLevel='ultimate';assert.equal(ai.value(room,p,room.tiles[1]),againstHuman);
+});

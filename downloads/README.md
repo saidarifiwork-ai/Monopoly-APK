@@ -1,6 +1,8 @@
-# Quartiers Maroc pour Android — version 1.0.12
+# Quartiers Maroc pour Android — version 1.0.13
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.12.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.13.apk)
+
+Expert et Ultime adaptent leurs sorties de prison et leur réserve aux occasions d’achat. En solo Ultime : deux robots indépendants, chacun pour soi.
 
 Six niveaux de robot : Débutant, Facile, Normal, Difficile, Expert et Ultime. Choix avant le solo et niveau individuel par robot dans le salon. Le serveur doit être mis à jour pour appliquer les nouvelles stratégies.
 
@@ -54,6 +56,6 @@ Le fichier audio fourni par l’utilisateur est joué à la réception d’un é
 
 Les paiements et achats réglés affichent le montant perdu sur la case ; une dette s’affiche au règlement seulement. La victoire présente le classement, l’argent et les biens, et une alerte sonore et visuelle signale le début du tour. Les animations et le son respectent les réglages existants.
 
-## Rejouer — version 1.0.12
+## Rejouer — version 1.0.13
 
 Après la victoire, l’hôte peut choisir « Rejouer » pour ramener les mêmes joueurs et robots dans le salon existant. Le code et les sessions restent identiques ; argent, terrain et état de partie sont remis à zéro. L’hôte démarre ensuite la nouvelle partie depuis le salon. Le redémarrage et les droits de l’hôte sont testés, ainsi que l’affichage à taille de téléphone dans Chromium. Aucun essai sur téléphone physique n’est revendiqué.

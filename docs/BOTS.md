@@ -13,6 +13,12 @@ décide jamais des dés, du solde ni des actions autorisées.
 | Expert | `expert` | Blocage des groupes adverses et réserve adaptée aux loyers atteignables. |
 | Ultime | `ultimate` | Réserve plus protectrice, classement des constructions selon les positions adverses, jusqu’à cinq constructions légales par tour. |
 
+Expert et Ultime évaluent aussi la sortie de prison : ils privilégient une
+carte ou un paiement de 50 DH quand des achats utiles les attendent, en
+particulier la dernière ville d’un groupe. Ils peuvent attendre un double
+si les prochains loyers sont trop dangereux ou si leur budget est insuffisant.
+Leur réserve de trésorerie est plus souple pour compléter un groupe.
+
 Les niveaux avancés évaluent les offres reçues du point de vue de l’acheteur
 ou du vendeur, et cherchent à préserver les sources de revenu lorsqu’ils
 règlent une dette. Ils ne consultent pas les cartes à venir et ne changent
@@ -24,9 +30,14 @@ Le paramètre optionnel `botLevel` est accepté par `/api/create` et l’action
 refusées. Le niveau est enregistré sur chaque robot et conservé lors d’un
 rejeu. Le bot temporaire d’un humain utilise Normal s’il n’a pas de niveau.
 
+En solo Ultime, la partie commence avec un humain et deux robots Ultime.
+Chaque robot défend ses propres intérêts : pas d’équipe, pas de partage de
+biens ou d’argent, et le second robot est un adversaire comme les humains.
+Les autres niveaux de solo conservent un seul robot.
+
 Sur le web et Android : choix avant le solo, puis choix individuel du niveau
 du prochain robot dans le salon. Les changements du moteur nécessitent le
-déploiement du serveur ; l’accueil Android nécessite l’APK v1.0.12 ou ultérieur.
+déploiement du serveur ; l’accueil Android nécessite l’APK v1.0.13 ou ultérieur.
 
 Validation : `node --test test/*.test.js`, `flutter analyze`, puis
-`flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8787` depuis `mobile/`.
+`flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8866` depuis `mobile/`.
