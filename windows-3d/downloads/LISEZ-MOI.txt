@@ -9,7 +9,9 @@ Plateau 3D fourni, adapté aux villes marocaines
 Pendant la partie, le plateau reste dégagé. « Menu / actions » ouvre les
 options et le compteur FPS ; « Mode performance » réduit la définition 3D.
 « Décor flou » améliore le décor mais peut réduire la fluidité.
-Au début de la partie, la caméra suit ton pion ; le flou est facultatif.
+Au début de la partie, la caméra regarde vers le centre depuis ton pion :
+le coin du joueur est en bas et le plateau s’ouvre devant lui.
+Le lancer et l’arrêt des dés ont lieu au centre ; le flou est facultatif.
 Utilise « Voir tout le plateau » pour afficher la carte complète, puis
 « Suivre mon pion » pour revenir à la vue rapprochée.
 À ton tour, utilise le grand bouton pour lancer les dés. Le bouton voisin

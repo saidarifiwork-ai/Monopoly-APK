@@ -108,6 +108,12 @@ func run() -> void:
 		fail("activation du flou facultatif")
 		return
 	scene.quality_control.button_pressed = false
+	var pawn_screen: Vector2 = scene.camera.unproject_position(scene.pawns[scene.state.me].position)
+	var centre_screen: Vector2 = scene.camera.unproject_position(Vector3.ZERO)
+	var viewport_size: Vector2 = root.get_visible_rect().size
+	if absf(pawn_screen.x / viewport_size.x - 0.5) > 0.08 or pawn_screen.y < viewport_size.y * 0.52 or centre_screen.y >= pawn_screen.y:
+		fail("cadrage : pion centré en bas, plateau devant")
+		return
 	if not scene.map_button.visible or scene.map_button.text != "Voir tout le plateau" or not scene.follow_anchor_valid:
 		fail("caméra qui suit le pion")
 		return
@@ -167,6 +173,10 @@ func run() -> void:
 	]
 	scene.state = sample
 	scene.update_state()
+	for die in scene.dice_nodes:
+		if absf(die.position.x) > 2.0 or absf(die.position.z) > 2.0:
+			fail("le lancer doit démarrer dans la zone centrale")
+			return
 	if not scene.roll_button.disabled or scene.main_panel.visible:
 		fail("bouton de lancer désactivé et panneau fermé après le lancer")
 		return
@@ -204,6 +214,10 @@ func run() -> void:
 	scene.state = sample
 	scene.selected_tile = 2
 	scene.update_state()
+	for die_index in range(2):
+		if scene.dice_nodes[die_index].position.distance_to(scene.dice_center_position(die_index)) > 0.01:
+			fail("les dés doivent s’arrêter au centre du plateau")
+			return
 	# Check the interactive auction layout using the same authoritative state.
 	sample.auction = {"index": 1, "amount": 4, "respondent": sample.me, "deadline": 123456}
 	scene.state = sample

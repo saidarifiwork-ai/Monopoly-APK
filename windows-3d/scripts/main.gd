@@ -305,7 +305,7 @@ func build_world() -> void:
 			board_symbol("★", pos, i, Color("de8c28"))
 	for i in range(2):
 		var die := Node3D.new()
-		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
+		die.position = dice_center_position(i)
 		add_child(die)
 		var die_model: PackedScene = load("res://assets/user_models/de-lisse.glb")
 		var shape := die_model.instantiate() as Node3D
@@ -564,8 +564,9 @@ func _process(delta: float) -> void:
 	if nearest != last_label_region:
 		show_nearby_labels(nearest)
 		last_label_region = nearest
-	var back := tile_position(nearest) - tile_position((nearest + 1) % 40)
-	var desired_angle := atan2(back.x, back.z)
+	# Look inward from the pawn's side of the board, so its corner is below
+	# the centre instead of rotating the view along the direction of travel.
+	var desired_angle := atan2(position.x, position.z)
 	if not follow_anchor_valid:
 		follow_anchor = position
 		follow_angle = desired_angle
@@ -584,14 +585,13 @@ func show_nearby_labels(index: int) -> void:
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
 	var following := focused_board and not map_overview and follow_anchor_valid
-	var angle := follow_angle + follow_orbit_offset + PI / 4 if following else view_angle
+	var angle := follow_angle + follow_orbit_offset if following else view_angle
 	var target := follow_anchor if following else Vector3.ZERO
 	target.y = 0.0
 	# Shift the board into the space left of the controls.
 	if following:
-		target = target.lerp(Vector3.ZERO, 0.20)
-		# Frame the pawn lower on screen with the board visible ahead.
-		target -= Vector3(sin(angle), 0, cos(angle)) * 0.65
+		# Keep the pawn in the lower half and the centre/dice ahead of it.
+		target *= 0.55
 	camera.position = target + Vector3(sin(angle) * view_distance, max(4.0, view_distance * view_elevation), cos(angle) * view_distance)
 	camera.look_at(target, Vector3.UP)
 	if focus_overlay != null and focus_overlay.visible:
@@ -969,6 +969,9 @@ func send_action(kind: String, fields: Dictionary = {}) -> void:
 		return
 	refresh()
 
+func dice_center_position(index: int) -> Vector3:
+	return Vector3((index - 0.5) * 0.78, 0.35, 0.8)
+
 func update_die_sides(index: int, top_value: int) -> void:
 	var patterns := [[4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]]
 	var remaining: Array[int] = []
@@ -1032,15 +1035,11 @@ func update_state() -> void:
 		for pip in range(dice_pips[i].size()):
 			dice_pips[i][pip].visible = pip in patterns[value - 1]
 	if new_events.any(func(event): return event.get("type", "") == "dice"):
-		var throw_from := tile_position(int(current.get("pos", 0)))
-		if pawns.has(str(current.get("id", ""))):
-			throw_from = pawns[str(current.id)].position
-		var inward := Vector3(-throw_from.x, 0, -throw_from.z).normalized()
-		var across := Vector3(-inward.z, 0, inward.x)
 		for i in range(dice_nodes.size()):
 			var die := dice_nodes[i]
-			var destination := Vector3(throw_from.x, 0.35, throw_from.z) + inward * 1.15 + across * (i - 0.5) * 0.72
-			die.position = Vector3(throw_from.x, 1.3, throw_from.z) - inward * 0.4
+			var destination := dice_center_position(i)
+			# Both the throw and the result stay on the central playing area.
+			die.position = destination + Vector3(-0.65, 1.15, -0.8)
 			die.rotation = Vector3.ZERO
 			var spin := create_tween().set_parallel(true)
 			spin.tween_method(animate_die_throw.bind(die, die.position, destination), 0.0, 1.0, 0.5)
