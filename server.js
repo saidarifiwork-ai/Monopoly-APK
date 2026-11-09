@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const presence = require('./presence');
 const auction = require('./auction');
+const botAI = require('./bot-ai');
 const BOT_ACTION = Symbol('bot action');
 
 const app = express();
@@ -739,14 +740,14 @@ function invokeFinanceAction(s, p, data) {
 
 function restartGame(s, p) {
     if (s.phase !== 'finished' || p.id !== s.host) throw new Error('Seul l’hôte peut relancer une partie terminée.');
-    const code=s.code, host=s.host, lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1;
+    const code=s.code, host=s.host, botLevel=s.botLevel || 'normal', lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1;
     const players=s.players.map(player => {
-        const {id, token, name, bot, temporaryBot, autoPlay} = player;
-        return {...newPlayer(name), id, token, bot: !!bot,
+        const {id, token, name, bot, botLevel, temporaryBot, autoPlay} = player;
+        return {...newPlayer(name), id, token, bot: !!bot, ...(botLevel ? {botLevel} : {}),
             ...(temporaryBot ? {temporaryBot: true} : {}), ...(autoPlay ? {autoPlay: true} : {})};
     });
     for (const key of Object.keys(s)) delete s[key];
-    Object.assign(s, {code, host, players, lastSeen, gameRound, eventSeq,
+    Object.assign(s, {code, host, botLevel, players, lastSeen, gameRound, eventSeq,
         tiles:newTiles(), turn:0, phase:'lobby', rolled:false, dice:[5,3],
         log:[p.name+' relance une partie.'], events:[], botPhase:'buy', botNext:0, debts:[], offer:null});
 }
@@ -783,10 +784,12 @@ function invokeGameAction(s, p, data) {
         if (s.phase !== 'lobby' || p.id !== s.host || s.players.length >= 6) {
             throw new Error('Ajout du robot impossible.');
         }
+        const botLevel = botAI.normalize(data.botLevel ?? s.botLevel ?? 'normal');
         const bot = newPlayer('Robot ' + (s.players.filter(x => x.bot).length + 1));
         bot.bot = true;
+        bot.botLevel = botLevel;
         s.players.push(bot);
-        addLog(s, bot.name + ' rejoint la table.');
+        addLog(s, bot.name + ' rejoint la table · ' + botAI.profile(bot).name + '.');
         return;
     }
     
@@ -979,29 +982,9 @@ function invokeDebtBot(s) {
     const p = s.players.find(x => x.id === d.player);
     if (!p || !p.bot) return;
     
-    // Try to sell houses first
-    for (let i = 0; i < s.tiles.length; i++) {
-        const t = s.tiles[i];
-        if (t.owner === p.id && t.level > 0) {
-            const higher = s.tiles.filter(x => x.group === t.group && x.level > t.level);
-            if (higher.length === 0) {
-                invokeTradeAction(s, p, {type: 'sellhouse', index: i});
-                return;
-            }
-        }
-    }
-    
-    // Try to mortgage
-    for (let i = 0; i < s.tiles.length; i++) {
-        const t = s.tiles[i];
-        if (t.owner === p.id && !t.mortgaged) {
-            invokeFinanceAction(s, p, {type: 'mortgage', index: i});
-            return;
-        }
-    }
-    
-    // Bankrupt
-    invokeFinanceAction(s, p, {type: 'bankrupt'});
+    const action = botAI.debtAction(s, p);
+    if (action.type === 'sellhouse') invokeTradeAction(s, p, action);
+    else invokeFinanceAction(s, p, action);
 }
 
 function invokeBotStep(s) {
@@ -1028,27 +1011,7 @@ function invokeBotStep(s) {
         const bot = s.players.filter(p => p.id === o.respondent && p.bot);
         
         if (bot.length > 0) {
-            const t = s.tiles[o.index];
-            const group = s.tiles.filter(x => x.group === t.group && x.owner === bot[0].id);
-            let factor = 1.4;
-            
-            if (t.kind === 'property' && group.length > 1) {
-                factor = 2.5;
-            }
-            
-            const target = Math.ceil(t.price * factor);
-            let extras = 0;
-            for (const i of o.offered) {
-                extras += s.tiles[i].price;
-            }
-            
-            if (o.amount + extras >= target) {
-                invokeTradeAction(s, bot[0], {type: 'acceptoffer'});
-            } else if (o.amount + extras < t.price * 0.5) {
-                invokeTradeAction(s, bot[0], {type: 'rejectoffer'});
-            } else {
-                invokeTradeAction(s, bot[0], {type: 'counteroffer', amount: Math.max(0, target - extras)});
-            }
+            invokeTradeAction(s, bot[0], botAI.tradeDecision(s, bot[0], o));
         }
         return;
     }
@@ -1072,30 +1035,28 @@ function invokeBotStep(s) {
     
     if (s.botPhase === 'buy') {
         s.botPhase = 'build';
+        s.botBuildCount = 0;
         const t = s.tiles[p.pos];
-        if (!s.auctioned && t.price > 0 && !t.owner && p.money >= t.price + 150) {
+        if (!s.auctioned && t.price > 0 && !t.owner && botAI.shouldBuy(s, p, t)) {
             invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'buy'});
             return;
         }
     }
-    
     if (s.botPhase === 'build') {
-        s.botPhase = 'end';
-        
-        for (let i = 0; i < s.tiles.length; i++) {
-            const t = s.tiles[i];
-            if (t.kind !== 'property' || t.owner !== p.id || t.level >= 5 || p.money < t.build + 300) {
-                continue;
-            }
-            
-            const group = s.tiles.filter(x => x.group === t.group);
-            if (group.filter(x => x.owner !== p.id || x.mortgaged || x.level < t.level).length === 0) {
-                invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'build', index: i});
-                return;
-            }
+        const restore = botAI.unmortgageIndex(s, p);
+        if (restore >= 0) {
+            invokeFinanceAction(s, p, {type: 'unmortgage', index: restore});
+            return;
         }
+        const index = botAI.buildIndex(s, p);
+        if (index >= 0 && (s.botBuildCount || 0) < botAI.profile(p).builds) {
+            s.botBuildCount = (s.botBuildCount || 0) + 1;
+            invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'build', index});
+            return;
+        }
+        s.botPhase = 'end';
     }
-    
+
     invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'end'});
 }
 
@@ -1124,7 +1085,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 10});
+    res.json({app: 'quartiers', version: 11, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {
@@ -1133,6 +1094,7 @@ app.post('/api/create', (req, res) => {
             throw new Error('Limite de salons atteinte : redémarrez le serveur.');
         }
         
+        const botLevel = botAI.normalize(req.body.botLevel ?? 'normal');
         const p = newPlayer(req.body.name);
         let code;
         
@@ -1143,6 +1105,7 @@ app.post('/api/create', (req, res) => {
         const s = {
             code,
             host: p.id,
+            botLevel,
             players: [p],
             tiles: newTiles(),
             turn: 0,

@@ -154,6 +154,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   bool leaving = false;
   bool gameOpened = false;
   bool settingsOpen = false;
+  String botLevel = 'normal';
   @override
   void initState() {
     super.initState();
@@ -246,7 +247,8 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
       await configure();
       return;
     }
-    await c.enter(name.text, solo: solo, room: join ? room.text : null);
+    await c.enter(name.text,
+        solo: solo, room: join ? room.text : null, botLevel: botLevel);
     if (mounted && c.state != null && c.error == null) {
       setState(() => gameOpened = true);
     }
@@ -410,6 +412,26 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                         : null,
                   ),
                   const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: botLevel,
+                    decoration:
+                        const InputDecoration(labelText: 'Niveau du robot'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'beginner', child: Text('Débutant')),
+                      DropdownMenuItem(value: 'easy', child: Text('Facile')),
+                      DropdownMenuItem(value: 'normal', child: Text('Normal')),
+                      DropdownMenuItem(value: 'hard', child: Text('Difficile')),
+                      DropdownMenuItem(value: 'expert', child: Text('Expert')),
+                      DropdownMenuItem(
+                          value: 'ultimate', child: Text('Ultime')),
+                    ],
+                    onChanged: c.busy
+                        ? null
+                        : (value) =>
+                            setState(() => botLevel = value ?? 'normal'),
+                  ),
+                  const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: c.busy ? null : () => enter(solo: true),
                     icon: const Icon(Icons.smart_toy_outlined),

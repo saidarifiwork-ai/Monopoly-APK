@@ -1,3 +1,5 @@
+const BOT_LEVELS=[['beginner','Débutant'],['easy','Facile'],['normal','Normal'],['hard','Difficile'],['expert','Expert'],['ultimate','Ultime']];
+let pendingBotLevel='normal';
 const $=s=>document.querySelector(s),colors=['#d9483b','#4383bc','#bd8b32','#986ab6','#408558','#bc617b'];
 let session=null;try{session=JSON.parse((sessionStorage.getItem('quartiers')||localStorage.getItem('quartiers'))||'null')}catch{sessionStorage.removeItem('quartiers')}
 let suspended=localStorage.getItem('quartiers-paused')==='yes';
@@ -16,7 +18,7 @@ function resetView(){gameSound.refusal.pause();document.querySelector('#victory-
 async function enter(create,mode){
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
- try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode});suspended=false;localStorage.removeItem('quartiers-paused');resetView();session={code:result.code,token:result.token};sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
+ try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode,botLevel:$('#bot-level').value});suspended=false;localStorage.removeItem('quartiers-paused');resetView();session={code:result.code,token:result.token};sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
 }
 async function action(type,index,extra={}){
  if(busy||animating)return;busy=true;render();
@@ -103,7 +105,7 @@ function renderActions(){
  $('#action-title').textContent=s.phase==='lobby'?'Rassemblez vos amis.':s.phase==='finished'?'La victoire est à vous ?':current.bot?'Le robot joue.':current.id===s.me?'C’est votre tour !':current.name+' joue.';
  $('#status').textContent=s.phase==='lobby'?'Ajoutez un robot ou partagez le salon. Lancez quand tout le monde est prêt.':s.phase==='finished'?current.name+' remporte la partie. '+(me.id===s.host?'Relancez une partie avec les mêmes joueurs.':'L’hôte peut relancer une partie.'):animating?'Suivez le lancer et le déplacement sur le plateau…':current.id===s.me?(s.rolled?'Achetez la ville si elle est libre, puis terminez votre tour.':'Lancez les dés : votre pion avancera case par case.'):current.bot?'Regardez ses dés, son pion et ses décisions. Il joue automatiquement.':'Vous pouvez examiner les villes pendant son tour.';
  if(s.phase==='finished'&&me.id===s.host)addButton('#actions','🔄 Rejouer','rematch');
- if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6)addButton('#actions','Ajouter un robot 🤖','addbot',null,true);if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
+ if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6){const label=document.createElement('label');label.textContent='Niveau du prochain robot';const select=document.createElement('select');select.id='lobby-bot-level';select.setAttribute('aria-label','Niveau du prochain robot');for(const [id,name] of BOT_LEVELS)select.add(new Option(name,id));select.value=pendingBotLevel;select.disabled=busy||animating;select.onchange=()=>{pendingBotLevel=select.value};label.append(select);$('#actions').append(label);const add=document.createElement('button');add.className='secondary';add.textContent='Ajouter un robot 🤖';add.disabled=busy||animating;add.onclick=()=>action('addbot',null,{botLevel:pendingBotLevel});$('#actions').append(add)}if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
  if(s.phase==='opening'){
   $('#action-title').textContent='Qui commence ?';
   $('#status').textContent=(s.openingRound>1?'Égalité : les joueurs concernés relancent. ':'Chaque joueur lance deux dés. Le plus grand total commence. ')+(current.id===me.id?'À vous de lancer !':current.name+' doit lancer'+(current.bot?' automatiquement.':'.'));
@@ -167,7 +169,7 @@ function render(){
    }
 
    if (p.connectionStatus === 'replaced') statusText = p.autoPlay?'Mode auto':'Robot temporaire · retour possible';
-   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.connectionStatus==='disconnected'?'warning':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}</span>${p.id===s.me&&!p.out&&['opening','playing'].includes(s.phase)?`<label class="auto-toggle"><input type="checkbox" ${p.autoPlay?'checked':''} ${busy||animating?'disabled':''}> 🤖 Mode auto</label>`:''}<small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
+   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.connectionStatus==='disconnected'?'warning':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}${p.bot&&!p.temporaryBot?' · '+(BOT_LEVELS.find(l=>l[0]===p.botLevel)?.[1]||'Normal'):''}</span>${p.id===s.me&&!p.out&&['opening','playing'].includes(s.phase)?`<label class="auto-toggle"><input type="checkbox" ${p.autoPlay?'checked':''} ${busy||animating?'disabled':''}> 🤖 Mode auto</label>`:''}<small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
  }).join('');
  const autoToggle=$('#players .auto-toggle input');
  if(autoToggle)autoToggle.onchange=()=>action('autoplay',null,{enabled:autoToggle.checked});

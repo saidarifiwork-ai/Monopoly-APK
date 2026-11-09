@@ -56,11 +56,13 @@ void main() {
       expect(next.player['money'], s.player['money'] - 1);
     }
     await action(current, 'end');
-    final solo = await api
-        .request('/api/create', data: {'name': 'Test robot', 'mode': 'solo'});
+    final solo = await api.request('/api/create',
+        data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'ultimate'});
     s = await state(solo);
     expect(s.phase, 'opening');
     expect(s.players.where((p) => p['bot'] == true).length, 1);
+    expect(
+        s.players.firstWhere((p) => p['bot'] == true)['botLevel'], 'ultimate');
     final bot = s.players.firstWhere((p) => p['bot'] == true)['id'];
     final deadline = DateTime.now().add(const Duration(seconds: 35));
     while (DateTime.now().isBefore(deadline)) {

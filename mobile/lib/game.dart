@@ -274,7 +274,8 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  Future<void> enter(String name, {String? room, bool solo = false}) async {
+  Future<void> enter(String name,
+      {String? room, bool solo = false, String botLevel = 'normal'}) async {
     if (busy || _api == null) return;
     busy = true;
     error = null;
@@ -287,6 +288,7 @@ class GameController extends ChangeNotifier {
           'name': name.trim(),
           if (room != null) 'code': room.trim().toUpperCase(),
           if (solo) 'mode': 'solo',
+          if (room == null) 'botLevel': botLevel,
         },
       );
       state = null;
