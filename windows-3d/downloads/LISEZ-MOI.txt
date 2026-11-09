@@ -6,12 +6,16 @@ Plateau 3D fourni, adapté aux villes marocaines
 3. Connecte-toi à Internet, choisis ton prénom et crée ou rejoins un salon.
 4. Caméra : flèches du clavier, clic droit et mouvement de souris, molette.
 5. Clique sur une case pour afficher son nom et son prix en grand.
-Le nombre de FPS est indiqué à droite. Active « Mode performance » si nécessaire.
+Pendant la partie, le plateau reste dégagé. « Menu / actions » ouvre les
+options et le compteur FPS ; « Mode performance » réduit la définition 3D.
 « Décor flou » améliore le décor mais peut réduire la fluidité.
 Au début de la partie, la caméra suit ton pion ; le flou est facultatif.
 Utilise « Voir tout le plateau » pour afficher la carte complète, puis
 « Suivre mon pion » pour revenir à la vue rapprochée.
-À ton tour, utilise le grand bouton pour lancer les dés.
+À ton tour, utilise le grand bouton pour lancer les dés. Le bouton voisin
+permet d’acheter la case où tu arrives. Clique une ville que tu possèdes :
+ce bouton devient « Construire » si les règles permettent une construction.
+Les enchères, les offres, les hypothèques et le mode auto restent dans le menu.
 
 Le serveur configuré est celui du site web et de l’APK. Les fonctions principales
 sont en cours de test. Le programme est un prototype : les monuments des villes,
@@ -27,4 +31,5 @@ figure dans KENNEY-ATTRIBUTION.txt.
 Logiciel créé avec Godot Engine. Sa licence est fournie dans GODOT-LICENSE.txt.
 
 Les pions voiture, bateau et personnage viennent des modèles fournis par le
-joueur. Le dé adapté est crédité dans DE-LICENSE.txt ; le plateau est crédité dans PLATEAU-LICENSE.txt.
+joueur. Le plateau est crédité dans PLATEAU-LICENSE.txt. Le dé lisse actif est généré
+pour le jeu ; le modèle de dé fourni précédemment reste crédité dans DE-LICENSE.txt.

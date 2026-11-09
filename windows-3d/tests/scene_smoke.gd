@@ -100,11 +100,11 @@ func run() -> void:
 		fail("plateau agrandi en mode performance")
 		return
 	await process_frame
-	if not is_equal_approx(root.scaling_3d_scale, 0.85) or scene.labels[20].visible:
+	if not is_equal_approx(root.scaling_3d_scale, 1.0) or not scene.labels[20].visible:
 		fail("optimisations du plateau rapproché")
 		return
 	scene.quality_control.button_pressed = true
-	if not scene.focus_overlay.visible or not is_equal_approx(root.scaling_3d_scale, 0.85):
+	if not scene.focus_overlay.visible or not is_equal_approx(root.scaling_3d_scale, 1.0):
 		fail("activation du flou facultatif")
 		return
 	scene.quality_control.button_pressed = false
@@ -125,6 +125,14 @@ func run() -> void:
 	scene.update_state()
 	if scene.view_distance != 13.0:
 		fail("zoom du joueur conservé pendant les actualisations")
+		return
+	for control in [scene.context_button, scene.map_button, scene.menu_button]:
+		var rect: Rect2 = control.get_global_rect()
+		if rect.position.x < 0 or rect.position.y < 0 or rect.end.x > root.get_visible_rect().size.x or rect.end.y > root.get_visible_rect().size.y:
+			fail("commande hors de l’écran : " + str(control.text) + " " + str(rect) + " viewport " + str(root.get_visible_rect()))
+			return
+	if scene.main_panel.visible:
+		fail("grand panneau encore visible")
 		return
 	if not scene.roll_button.visible:
 		fail("bouton de lancer affiché quand c’est son tour")
@@ -159,8 +167,8 @@ func run() -> void:
 	]
 	scene.state = sample
 	scene.update_state()
-	if scene.roll_button.visible:
-		fail("bouton de lancer masqué après le lancer")
+	if not scene.roll_button.disabled or scene.main_panel.visible:
+		fail("bouton de lancer désactivé et panneau fermé après le lancer")
 		return
 	await create_timer(0.6).timeout
 	var expected: Vector3 = scene.tile_position(2) + Vector3(-0.22, 0.12, 0)
@@ -170,6 +178,32 @@ func run() -> void:
 	if scene.pawns[sample.players[0].id].position.distance_to(expected) > 0.02 or scene.dice_labels[0].text != "6" or scene.dice_labels[1].text != "2":
 		fail("dés et chemin animé du pion")
 		return
+	if not scene.context_button.disabled:
+		fail("achat sur case spéciale")
+		return
+	var purchase: Dictionary = sample.duplicate(true)
+	purchase.players[0].pos = 1
+	purchase.events = []
+	scene.state = purchase
+	scene.update_state()
+	if scene.context_button.disabled or scene.context_kind != "buy":
+		fail("achat disponible après arrivée sur une propriété libre")
+		return
+	scene.state = sample
+	scene.update_state()
+	var building: Dictionary = sample.duplicate(true)
+	for square in [1, 3]:
+		building.tiles[square].owner = building.me
+		building.tiles[square].level = 0
+	scene.state = building
+	scene.selected_tile = 1
+	scene.update_state()
+	if scene.context_kind != "build" or scene.context_button.disabled:
+		fail("construction depuis la case sélectionnée")
+		return
+	scene.state = sample
+	scene.selected_tile = 2
+	scene.update_state()
 	# Check the interactive auction layout using the same authoritative state.
 	sample.auction = {"index": 1, "amount": 4, "respondent": sample.me, "deadline": 123456}
 	scene.state = sample

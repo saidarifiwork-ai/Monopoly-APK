@@ -21,6 +21,7 @@ var tile_color_values := {}
 var dice_nodes: Array[Node3D] = []
 var dice_labels: Array[Label3D] = []
 var dice_pips: Array[Array] = []
+var dice_side_meshes: Array[MultiMeshInstance3D] = []
 var pawn_tweens := {}
 var last_event_seq := -1
 var last_round := -1
@@ -53,6 +54,16 @@ var view_elevation := 0.9
 var view_distance := 18.5
 var focused_board := false
 var focus_overlay: ColorRect
+var main_panel: PanelContainer
+var game_hud: VBoxContainer
+var hud_status: Label
+var context_button: Button
+var end_button: Button
+var menu_button: Button
+var selected_tile := -1
+var last_my_square := -1
+var context_kind := ""
+var last_urgent := false
 var map_button: Button
 var roll_button: Button
 var quality_blur := false
@@ -296,13 +307,9 @@ func build_world() -> void:
 		var die := Node3D.new()
 		die.position = Vector3((i - 0.5) * 0.8, 0.35, 1.8)
 		add_child(die)
-		var die_model: PackedScene = load("res://assets/user_models/de.glb")
-		if die_model != null:
-			var shape := die_model.instantiate() as Node3D
-			shape.scale = Vector3.ONE * 0.58
-			die.add_child(shape)
-		else:
-			box(die, Vector3(0.58, 0.58, 0.58), Vector3.ZERO, Color("fff7e7"))
+		var die_model: PackedScene = load("res://assets/user_models/de-lisse.glb")
+		var shape := die_model.instantiate() as Node3D
+		die.add_child(shape)
 		var face := Label3D.new()
 		face.text = "–"
 		face.position = Vector3(0, 0.30, 0)
@@ -319,6 +326,21 @@ func build_world() -> void:
 				var dot := cylinder(die, 0.055, 0.012, Vector3((col - 1) * 0.16, 0.297, (row - 1) * 0.16), Color("202c2a"))
 				dot.visible = (row * 3 + col) in ([0, 8] if i == 0 else [0, 2, 4, 6, 8])
 				dots.append(dot)
+		var side_mesh := CylinderMesh.new()
+		side_mesh.top_radius = 0.043
+		side_mesh.bottom_radius = 0.043
+		side_mesh.height = 0.008
+		side_mesh.radial_segments = 12
+		side_mesh.material = material(Color("17221d"))
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = side_mesh
+		multi.instance_count = 36
+		var side_node := MultiMeshInstance3D.new()
+		side_node.multimesh = multi
+		die.add_child(side_node)
+		dice_side_meshes.append(side_node)
+		update_die_sides(i, 2 if i == 0 else 5)
 		dice_pips.append(dots)
 		dice_nodes.append(die)
 		dice_labels.append(face)
@@ -498,6 +520,12 @@ func set_board_focus(enabled: bool) -> void:
 		show_nearby_labels(-1)
 	view_distance = 7.8 if enabled else 18.5
 	focus_overlay.visible = enabled and quality_blur
+	if main_panel != null:
+		main_panel.visible = not enabled
+		game_hud.visible = enabled
+		menu_button.visible = enabled
+		end_button.visible = false
+		context_button.visible = enabled
 	if map_button != null:
 		map_button.visible = enabled
 		map_button.text = "Voir tout le plateau"
@@ -551,7 +579,7 @@ func _process(delta: float) -> void:
 func show_nearby_labels(index: int) -> void:
 	for i in range(labels.size()):
 		var distance := absi(i - index)
-		labels[i].visible = index < 0 or mini(distance, 40 - distance) <= 7
+		labels[i].visible = true
 
 func update_camera() -> void:
 	camera.size = view_distance * 1.16
@@ -560,7 +588,10 @@ func update_camera() -> void:
 	var target := follow_anchor if following else Vector3.ZERO
 	target.y = 0.0
 	# Shift the board into the space left of the controls.
-	target += Vector3(cos(angle), 0, -sin(angle)) * (view_distance * 0.08)
+	if following:
+		target = target.lerp(Vector3.ZERO, 0.20)
+		# Frame the pawn lower on screen with the board visible ahead.
+		target -= Vector3(sin(angle), 0, cos(angle)) * 0.65
 	camera.position = target + Vector3(sin(angle) * view_distance, max(4.0, view_distance * view_elevation), cos(angle) * view_distance)
 	camera.look_at(target, Vector3.UP)
 	if focus_overlay != null and focus_overlay.visible:
@@ -624,7 +655,9 @@ func inspect_tile(screen_pos: Vector2) -> void:
 			distance = d
 			closest = i
 	if closest >= 0:
+		selected_tile = closest
 		tile_details.text = labels[closest].text.replace("\n", " ")
+		update_compact_controls()
 
 func add_button(parent: Node, text: String, callback: Callable) -> Button:
 	var button := Button.new()
@@ -641,7 +674,7 @@ func build_ui() -> void:
 	roll_button = Button.new()
 	roll_button.text = "LANCER LES DÉS"
 	roll_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	roll_button.position = Vector2(-215, -105)
+	roll_button.position = Vector2(-330, -94)
 	roll_button.size = Vector2(210, 70)
 	roll_button.add_theme_font_size_override("font_size", 20)
 	var roll_style := StyleBoxFlat.new()
@@ -661,6 +694,7 @@ func build_ui() -> void:
 			send_action("roll"))
 	layer.add_child(roll_button)
 	var panel := PanelContainer.new()
+	main_panel = panel
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.position = Vector2(-370, 18)
 	panel.size = Vector2(350, 0)
@@ -702,9 +736,9 @@ func build_ui() -> void:
 	performance.text = "Mode performance"
 	performance.button_pressed = false
 	performance.toggled.connect(func(enabled: bool):
-		get_viewport().scaling_3d_scale = 0.75 if enabled else 0.85)
+		get_viewport().scaling_3d_scale = 0.75 if enabled else 1.0)
 	content.add_child(performance)
-	get_viewport().scaling_3d_scale = 0.85
+	get_viewport().scaling_3d_scale = 1.0
 	tile_details = Label.new()
 	tile_details.text = "Clique sur une case pour la lire"
 	tile_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -760,6 +794,122 @@ func build_ui() -> void:
 	action_scroll.add_child(actions)
 	exit_button = add_button(content, "Retour à l’accueil", confirm_leave)
 	exit_button.visible = false
+	game_hud = VBoxContainer.new()
+	game_hud.position = Vector2(24, 18)
+	game_hud.custom_minimum_size = Vector2(620, 0)
+	game_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(game_hud)
+	hud_status = Label.new()
+	hud_status.add_theme_color_override("font_color", Color("172e23"))
+	hud_status.add_theme_font_size_override("font_size", 20)
+	game_hud.add_child(hud_status)
+	tile_details.reparent(game_hud)
+	tile_details.add_theme_color_override("font_color", Color("172e23"))
+	game_hud.visible = false
+	menu_button = add_button(layer, "Menu / actions", func(): main_panel.visible = not main_panel.visible)
+	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	menu_button.position = Vector2(-185, 18)
+	menu_button.visible = false
+	panel.position.y = 70
+	map_button.reparent(layer)
+	map_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	map_button.position = Vector2(-185, 65)
+	context_button = add_button(layer, "ACHETER", func():
+		if waiting:
+			return
+		if context_kind == "build":
+			send_action("build", {"index": selected_tile})
+		elif context_kind == "buy":
+			send_action("buy"))
+	context_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	context_button.position = Vector2(-100, -94)
+	context_button.size = Vector2(230, 70)
+	context_button.add_theme_font_size_override("font_size", 20)
+	context_button.visible = false
+	end_button = add_button(layer, "TERMINER LE TOUR", func(): send_action("end"))
+	end_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	end_button.position = Vector2(150, -94)
+	end_button.size = Vector2(240, 70)
+	end_button.visible = false
+	var ui_root := Control.new()
+	ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(ui_root)
+	for button in [menu_button, map_button, context_button, end_button]:
+		button.reparent(ui_root)
+	menu_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	menu_button.position = Vector2(-220, 18)
+	menu_button.size = Vector2(195, 38)
+	map_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	map_button.position = Vector2(-220, 65)
+	map_button.size = Vector2(195, 38)
+	context_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	context_button.position = Vector2(-100, -94)
+	context_button.size = Vector2(230, 70)
+	end_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	end_button.position = Vector2(150, -94)
+	end_button.size = Vector2(240, 70)
+	menu_button.offset_left = -220
+	menu_button.offset_right = -25
+	menu_button.offset_top = 18
+	menu_button.offset_bottom = 56
+	map_button.offset_left = -220
+	map_button.offset_right = -25
+	map_button.offset_top = 65
+	map_button.offset_bottom = 103
+	context_button.offset_left = -100
+	context_button.offset_right = 130
+	context_button.offset_top = -94
+	context_button.offset_bottom = -24
+	end_button.offset_left = 150
+	end_button.offset_right = 390
+	end_button.offset_top = -94
+	end_button.offset_bottom = -24
+
+func update_compact_controls() -> void:
+	if context_button == null or not focused_board:
+		return
+	var me := str(state.get("me", ""))
+	var mine: Dictionary = {}
+	var players: Array = state.get("players", [])
+	for player in players:
+		if str(player.id) == me:
+			mine = player
+	var tiles: Array = state.get("tiles", [])
+	var square := int(mine.get("pos", 0))
+	if square != last_my_square:
+		selected_tile = square
+		last_my_square = square
+	var selected: Dictionary = tiles[selected_tile] if selected_tile >= 0 and selected_tile < tiles.size() else {}
+	var turn := int(state.get("turn", 0))
+	var my_turn: bool = turn < players.size() and str(players[turn].id) == me
+	var blocked: bool = state.get("auction") != null or state.get("offer") != null or not state.get("debts", []).is_empty() or mine.get("autoPlay", false) or mine.get("out", false)
+	var playing: bool = state.get("phase") == "playing"
+	context_kind = "buy"
+	context_button.text = "ACHETER"
+	context_button.disabled = true
+	context_button.visible = true
+	if selected.get("owner", "") == me and selected.get("kind", "") == "property":
+		context_kind = "build"
+		context_button.text = "CONSTRUIRE · " + str(int(selected.get("build", 0))) + " DH"
+		var legal: bool = int(selected.get("level", 0)) < 5 and int(mine.get("money", 0)) >= int(selected.get("build", 0))
+		for tile in tiles:
+			if tile.get("group", -2) == selected.get("group", -1) and (tile.get("owner", "") != me or tile.get("mortgaged", false) or int(tile.get("level", 0)) < int(selected.get("level", 0))):
+				legal = false
+		context_button.disabled = not (playing and legal and not blocked)
+	elif int(selected.get("price", 0)) > 0 and selected.get("owner", "").is_empty():
+		context_button.text = "ACHETER · " + str(int(selected.price)) + " DH"
+		context_button.disabled = not (playing and my_turn and state.get("rolled", false) and selected_tile == square and not state.get("auctioned", false) and not blocked and int(mine.get("money", 0)) >= int(selected.price))
+	end_button.visible = playing and my_turn and state.get("rolled", false) and not blocked
+	var urgent: bool = state.get("auction") != null or state.get("offer") != null or not state.get("debts", []).is_empty()
+	if urgent != last_urgent:
+		main_panel.visible = urgent
+	last_urgent = urgent
+	hud_status.text = str(mine.get("name", "")) + " · " + str(int(mine.get("money", 0))) + " DH · " + ("À toi de jouer" if my_turn else "Tour de " + str(players[turn].get("name", "")) if turn < players.size() else "") + " · " + str(api.session.get("code", ""))
+	if Time.get_ticks_msec() < error_until:
+		hud_status.text = last_error
+	if not selected.is_empty():
+		tile_details.text = str(selected.get("name", "")) + (" · " + str(int(selected.get("price", 0))) + " DH" if int(selected.get("price", 0)) > 0 else "")
 
 func enter(join: bool, solo: bool) -> void:
 	if waiting:
@@ -819,6 +969,28 @@ func send_action(kind: String, fields: Dictionary = {}) -> void:
 		return
 	refresh()
 
+func update_die_sides(index: int, top_value: int) -> void:
+	var patterns := [[4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]]
+	var remaining: Array[int] = []
+	for v in range(1, 7):
+		if v != top_value and v != 7 - top_value:
+			remaining.append(v)
+	var faces := [remaining[0], remaining[1], 7 - remaining[0], 7 - remaining[1]]
+	var multi := dice_side_meshes[index].multimesh
+	for face in range(4):
+		for pip in range(9):
+			var a := (pip % 3 - 1) * 0.14
+			var b := (int(pip / 3) - 1) * 0.14
+			var basis := Basis(Vector3.RIGHT, PI / 2) if face % 2 == 0 else Basis(Vector3.FORWARD, PI / 2)
+			var pos := Vector3(a, b, 0.291 if face == 0 else -0.291) if face % 2 == 0 else Vector3(0.291 if face == 1 else -0.291, b, a)
+			if not pip in patterns[int(faces[face]) - 1]:
+				basis = basis.scaled(Vector3.ZERO)
+			multi.set_instance_transform(face * 9 + pip, Transform3D(basis, pos))
+
+func animate_die_throw(progress: float, die: Node3D, from: Vector3, to: Vector3) -> void:
+	if is_instance_valid(die):
+		die.position = from.lerp(to, progress) + Vector3(0, absf(sin(progress * PI * 2.0)) * (1.0 - progress) * 0.45, 0)
+
 func animate_pawn_hop(progress: float, pawn: Node3D, from: Vector3, to: Vector3) -> void:
 	if is_instance_valid(pawn):
 		pawn.position = from.lerp(to, progress) + Vector3(0, sin(progress * PI) * 0.24, 0)
@@ -856,6 +1028,7 @@ func update_state() -> void:
 	for i in range(min(dice.size(), dice_labels.size())):
 		var value := clampi(int(dice[i]), 1, 6)
 		dice_labels[i].text = str(value)
+		update_die_sides(i, value)
 		for pip in range(dice_pips[i].size()):
 			dice_pips[i][pip].visible = pip in patterns[value - 1]
 	if new_events.any(func(event): return event.get("type", "") == "dice"):
@@ -870,7 +1043,7 @@ func update_state() -> void:
 			die.position = Vector3(throw_from.x, 1.3, throw_from.z) - inward * 0.4
 			die.rotation = Vector3.ZERO
 			var spin := create_tween().set_parallel(true)
-			spin.tween_property(die, "position", destination, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			spin.tween_method(animate_die_throw.bind(die, die.position, destination), 0.0, 1.0, 0.5)
 			spin.tween_property(die, "rotation:x", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 			spin.tween_property(die, "rotation:y", TAU, 0.5).set_trans(Tween.TRANS_SINE)
 	for i in range(players.size()):
@@ -917,7 +1090,9 @@ func update_state() -> void:
 	var can_roll: bool = phase in ["opening", "playing"] and str(current.get("id", "")) == me and not mine.get("out", false) and not mine.get("autoPlay", false) and state.get("auction") == null and state.get("offer") == null and state.get("debts", []).is_empty()
 	if phase == "playing" and state.get("rolled", false):
 		can_roll = false
-	roll_button.visible = can_roll
+	roll_button.visible = phase in ["opening", "playing"]
+	roll_button.disabled = not can_roll
+	update_compact_controls()
 	show_victory(phase, current, players, tiles, me, round_number)
 	var turn_key := phase + ":" + str(current.get("id", "")) + ":" + str(round_number)
 	if not last_turn_key.is_empty() and turn_key != last_turn_key and phase == "playing" and str(current.get("id", "")) == me and not mine.get("autoPlay", false) and sound_enabled:
@@ -1144,6 +1319,8 @@ func show_error(message: String) -> void:
 	last_error = message
 	error_until = Time.get_ticks_msec() + 5000
 	status.text = message
+	if hud_status != null:
+		hud_status.text = message
 
 func leave_session() -> void:
 	if waiting:
@@ -1164,6 +1341,10 @@ func leave_session() -> void:
 	state = {}
 	set_board_focus(false)
 	roll_button.visible = false
+	context_button.visible = false
+	end_button.visible = false
+	selected_tile = -1
+	last_my_square = -1
 	action_key = ""
 	session_view.visible = true
 	action_scroll.visible = false
