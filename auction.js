@@ -1,3 +1,4 @@
+const botAI = require('./bot-ai');
 const RESPONSE_MS = 15000;
 function next(room, now) {
   const a = room.auction;
@@ -59,7 +60,7 @@ function tick(room, now = Date.now()) {
     return next(room, now);
   }
   if (player.bot && now >= a.deadline - 1500) {
-    const limit = Math.min(player.money, Math.floor(room.tiles[a.index].price * 0.9));
+    const limit = botAI.bidLimit(room, player, room.tiles[a.index]);
     const amount = Math.min(limit, a.amount + Math.max(1, Math.floor(room.tiles[a.index].price / 10)));
     return respond(room, player, amount > a.amount && amount <= limit ? 'bid' : 'auctionpass', amount, now);
   }

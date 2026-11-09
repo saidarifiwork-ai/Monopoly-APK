@@ -7,6 +7,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'game_test.dart' show fixture;
 
 void main() {
+  testWidgets('six bot difficulties can be selected on the native welcome',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'server': ''});
+    final controller = GameController(await SharedPreferences.getInstance());
+    await tester.pumpWidget(QuartiersApp(controller: controller));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Normal'));
+    await tester.tap(find.text('Normal'));
+    await tester.pumpAndSettle();
+    for (final level in [
+      'Débutant',
+      'Facile',
+      'Normal',
+      'Difficile',
+      'Expert',
+      'Ultime'
+    ]) {
+      expect(find.text(level), findsWidgets);
+    }
+    await tester.tap(find.text('Ultime').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Ultime'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('phone welcome validates name and fits with large text', (
     tester,
   ) async {
