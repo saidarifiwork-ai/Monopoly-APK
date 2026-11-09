@@ -341,156 +341,159 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     );
   }
 
-  Widget welcome() => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: form,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (c.state != null) ...[
-                    FilledButton.icon(
-                      onPressed: c.busy
-                          ? null
-                          : () => setState(() => gameOpened = true),
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Reprendre ma partie'),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  Container(
-                    padding: const EdgeInsets.all(26),
+  Widget welcome() => LayoutBuilder(builder: (context, constraints) {
+        final portrait = constraints.maxWidth < 550 &&
+            constraints.maxHeight > constraints.maxWidth;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/game/welcome-background.png',
+              fit: BoxFit.cover,
+              alignment: const Alignment(0.65, 0),
+              excludeFromSemantics: true,
+            ),
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, portrait ? 320 : 24, 20, 24),
+              child: Align(
+                alignment:
+                    portrait ? Alignment.topCenter : Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: ink,
-                      borderRadius: BorderRadius.circular(26),
+                      color: cream.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white70),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x30183C33), blurRadius: 24),
+                      ],
                     ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.landscape_rounded, color: gold, size: 48),
-                        SizedBox(height: 20),
-                        Text(
-                          'Un lancer.\nUne ville.\nVotre empire.',
-                          style: TextStyle(
-                            fontSize: 36,
-                            height: 1.1,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                    child: Form(
+                      key: form,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (c.state != null) ...[
+                            FilledButton.icon(
+                              onPressed: c.busy
+                                  ? null
+                                  : () => setState(() => gameOpened = true),
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('Reprendre ma partie'),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          const Text(
+                            'Installez-vous à la table.',
+                            style: TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w800,
+                              color: ink,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'ÉDITION MAROC  ·  40 CASES',
-                          style: TextStyle(color: gold, letterSpacing: 1.5),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: name,
+                            maxLength: 20,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Votre prénom',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Indiquez votre prénom.'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            initialValue: botLevel,
+                            decoration: const InputDecoration(
+                                labelText: 'Niveau du robot'),
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'beginner', child: Text('Débutant')),
+                              DropdownMenuItem(
+                                  value: 'easy', child: Text('Facile')),
+                              DropdownMenuItem(
+                                  value: 'normal', child: Text('Normal')),
+                              DropdownMenuItem(
+                                  value: 'hard', child: Text('Difficile')),
+                              DropdownMenuItem(
+                                  value: 'expert', child: Text('Expert')),
+                              DropdownMenuItem(
+                                  value: 'ultimate', child: Text('Ultime')),
+                            ],
+                            onChanged: c.busy
+                                ? null
+                                : (value) => setState(
+                                    () => botLevel = value ?? 'normal'),
+                          ),
+                          if (botLevel == 'ultimate')
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                  'Toi contre deux robots indépendants : chacun joue pour lui.',
+                                  style: TextStyle(color: ink)),
+                            ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: c.busy ? null : () => enter(solo: true),
+                            icon: const Icon(Icons.smart_toy_outlined),
+                            label: Text(botLevel == 'ultimate'
+                                ? 'Affronter deux robots Ultime'
+                                : 'Jouer contre le robot'),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: c.busy ? null : enter,
+                            icon: const Icon(Icons.group_add_outlined),
+                            label: const Text('Créer un salon entre amis'),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 18),
+                            child: Row(
+                              children: [
+                                Expanded(child: Divider()),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text('OU REJOINDRE'),
+                                ),
+                                Expanded(child: Divider()),
+                              ],
+                            ),
+                          ),
+                          TextField(
+                            controller: room,
+                            maxLength: 6,
+                            textCapitalization: TextCapitalization.characters,
+                            autocorrect: false,
+                            decoration: const InputDecoration(
+                              labelText: 'Code du salon',
+                              prefixIcon: Icon(Icons.meeting_room_outlined),
+                            ),
+                          ),
+                          OutlinedButton(
+                            onPressed: c.busy ? null : () => enter(join: true),
+                            child: const Text('Rejoindre mes amis'),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            c.server.isEmpty
+                                ? 'Connexion Internet requise · configurez votre serveur ⚙'
+                                : 'Connexion Internet requise · ${Uri.parse(c.server).host}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Installez-vous à la table.',
-                    style: TextStyle(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w800,
-                      color: ink,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: name,
-                    maxLength: 20,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Votre prénom',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Indiquez votre prénom.'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: botLevel,
-                    decoration:
-                        const InputDecoration(labelText: 'Niveau du robot'),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'beginner', child: Text('Débutant')),
-                      DropdownMenuItem(value: 'easy', child: Text('Facile')),
-                      DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                      DropdownMenuItem(value: 'hard', child: Text('Difficile')),
-                      DropdownMenuItem(value: 'expert', child: Text('Expert')),
-                      DropdownMenuItem(
-                          value: 'ultimate', child: Text('Ultime')),
-                    ],
-                    onChanged: c.busy
-                        ? null
-                        : (value) =>
-                            setState(() => botLevel = value ?? 'normal'),
-                  ),
-                  if (botLevel == 'ultimate')
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text(
-                          'Toi contre deux robots indépendants : chacun joue pour lui.',
-                          style: TextStyle(color: ink)),
-                    ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: c.busy ? null : () => enter(solo: true),
-                    icon: const Icon(Icons.smart_toy_outlined),
-                    label: Text(botLevel == 'ultimate'
-                        ? 'Affronter deux robots Ultime'
-                        : 'Jouer contre le robot'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: c.busy ? null : enter,
-                    icon: const Icon(Icons.group_add_outlined),
-                    label: const Text('Créer un salon entre amis'),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 18),
-                    child: Row(
-                      children: [
-                        Expanded(child: Divider()),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Text('OU REJOINDRE'),
-                        ),
-                        Expanded(child: Divider()),
-                      ],
-                    ),
-                  ),
-                  TextField(
-                    controller: room,
-                    maxLength: 6,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Code du salon',
-                      prefixIcon: Icon(Icons.meeting_room_outlined),
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: c.busy ? null : () => enter(join: true),
-                    child: const Text('Rejoindre mes amis'),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    c.server.isEmpty
-                        ? 'Connexion Internet requise · configurez votre serveur ⚙'
-                        : 'Connexion Internet requise · ${Uri.parse(c.server).host}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
-      );
+          ],
+        );
+      });
 }

@@ -1,12 +1,14 @@
-# Quartiers Maroc pour Android — version 1.0.13
+# Quartiers Maroc pour Android — version 1.0.14
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.13.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.14.apk)
+
+Le nouvel accueil utilise l’image fournie comme fond sur le web et dans l’APK, avec un panneau de commandes lisible.
 
 Expert et Ultime adaptent leurs sorties de prison et leur réserve aux occasions d’achat. En solo Ultime : deux robots indépendants, chacun pour soi.
 
 Six niveaux de robot : Débutant, Facile, Normal, Difficile, Expert et Ultime. Choix avant le solo et niveau individuel par robot dans le salon. Le serveur doit être mis à jour pour appliquer les nouvelles stratégies.
 
-Environ 18 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
+Environ 20 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
 Cette version reprend **le vrai plateau du site**, ses pions SVG, les dés, les cartes, les sons et les animations. L’accueil est en Flutter ; les fichiers originaux du jeu sont embarqués dans l’APK. Les commandes sont adaptées au tactile, avec des onglets Biens / Joueurs / Journal / Son et les actions en bas de l’écran.
 
