@@ -627,6 +627,7 @@ function invokeTradeAction(s, p, data) {
         }
         o.amount = data.amount;
         o.respondent = p.id === o.buyer ? o.seller : o.buyer;
+        if (o.botInitiated) o.botDeadline = Date.now() + 45000;
         addLog(s, p.name + ' propose maintenant ' + o.amount + ' DH.');
         return;
     }
@@ -646,6 +647,7 @@ function invokeTradeAction(s, p, data) {
     s.offer = null;
     settleDebts(s);
     announce(s, buyer, buyer.name + ' achete ' + t.name + ' a ' + seller.name + ' pour ' + o.amount + ' DH.', 'purchase');
+    if (s.players[s.turn]?.bot && s.rolled && s.botPhase !== 'buy' && [buyer.id, seller.id].includes(s.players[s.turn].id)) s.botPhase = 'build';
 }
 
 function invokeFinanceAction(s, p, data) {
@@ -988,6 +990,11 @@ function invokeDebtBot(s) {
 }
 
 function invokeBotStep(s) {
+    if (s.offer?.botInitiated && Date.now() >= s.offer.botDeadline) {
+        s.offer = null;
+        addLog(s, 'L’offre du robot a expiré. La partie reprend.');
+        return;
+    }
     if (s.auction) {
         const message = auction.tick(s);
         if (message) addLog(s, message);
@@ -1011,7 +1018,12 @@ function invokeBotStep(s) {
         const bot = s.players.filter(p => p.id === o.respondent && p.bot);
         
         if (bot.length > 0) {
-            invokeTradeAction(s, bot[0], botAI.tradeDecision(s, bot[0], o));
+            let decision = botAI.tradeDecision(s, bot[0], o);
+            if (decision.type === 'counteroffer') {
+                if ((o.botCounterRounds || 0) >= 2) decision = {type: 'rejectoffer'};
+                else o.botCounterRounds = (o.botCounterRounds || 0) + 1;
+            }
+            invokeTradeAction(s, bot[0], decision);
         }
         return;
     }
@@ -1033,10 +1045,28 @@ function invokeBotStep(s) {
     if (s.botPhase === 'buy') {
         s.botPhase = 'build';
         s.botBuildCount = 0;
+        s.botOfferAttempted = false;
         const t = s.tiles[p.pos];
         if (!s.auctioned && t.price > 0 && !t.owner && botAI.shouldBuy(s, p, t)) {
             invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'buy'});
             return;
+        }
+        if (botAI.profile(p).skill >= 4 && !s.auctioned && t.price > 0 && !t.owner && botAI.bidLimit(s, p, t) > 0) {
+            invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'auction'});
+            return;
+        }
+    }
+    if (s.botPhase === 'build') {
+        if (botAI.profile(p).skill >= 4) {
+            const decision = botAI.investmentAction(s, p, (s.botBuildCount || 0) < botAI.profile(p).builds);
+            if (decision) {
+                if (decision.type === 'build') {
+                    s.botBuildCount = (s.botBuildCount || 0) + 1;
+                    invokeGameAction(s, p, {[BOT_ACTION]: true, ...decision});
+                } else invokeFinanceAction(s, p, decision);
+                return;
+            }
+            s.botPhase = 'end';
         }
     }
     if (s.botPhase === 'build') {
@@ -1054,6 +1084,18 @@ function invokeBotStep(s) {
         s.botPhase = 'end';
     }
 
+    if (!s.botOfferAttempted && botAI.profile(p).skill >= 4) {
+        s.botOfferAttempted = true;
+        const proposed = botAI.offerPlan(s, p);
+        if (proposed) {
+            p.lastBotOfferAt = Date.now();
+            invokeTradeAction(s, p, proposed);
+            s.offer.botInitiated = true;
+            s.offer.botDeadline = Date.now() + 45000;
+            addLog(s, 'Offre du robot : réponse sous 45 secondes, sinon la partie reprend.');
+            return;
+        }
+    }
     invokeGameAction(s, p, {[BOT_ACTION]: true, type: 'end'});
 }
 
@@ -1082,7 +1124,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 12, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 13, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {
