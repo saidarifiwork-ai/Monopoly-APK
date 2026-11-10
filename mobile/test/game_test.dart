@@ -133,7 +133,7 @@ void main() {
   });
 
   test('the board uses the original web renderer byte for byte', () {
-    for (final name in ['app.js', 'art.js', 'style.css']) {
+    for (final name in ['app.js', 'auth-web.js', 'art.js', 'style.css']) {
       expect(File('assets/game/$name').readAsBytesSync(),
           File('../$name').readAsBytesSync(),
           reason: '$name must stay identical');

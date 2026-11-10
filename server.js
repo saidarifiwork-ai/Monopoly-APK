@@ -6,6 +6,7 @@ const presence = require('./presence');
 const auction = require('./auction');
 const botAI = require('./bot-ai');
 const {shuffle} = require('./cards');
+const {createAuth} = require('./auth');
 const BOT_ACTION = Symbol('bot action');
 
 const app = express();
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 8787;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.set('trust proxy', 1);
+createAuth().install(app);
 app.use(express.static(__dirname));
 
 // Game state storage with persistence
@@ -1145,7 +1148,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 16, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 17, googleLoginRequired: true, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {
@@ -1155,7 +1158,9 @@ app.post('/api/create', (req, res) => {
         }
         
         const botLevel = botAI.normalize(req.body.botLevel ?? 'normal');
-        const p = newPlayer(req.body.name);
+        const p = newPlayer(req.body.name || req.account.name.slice(0, 20));
+        p.accountId = req.account.id;
+        p.picture = req.account.picture;
         let code;
         
         do {
@@ -1200,11 +1205,16 @@ app.post('/api/join', (req, res) => {
     try {
         const s = getRoom(req.body.code);
         
+        const existing = s.players.find(player => player.accountId === req.account.id);
+        if (existing) return res.json({code: s.code, token: existing.token});
+
         if (s.phase !== 'lobby' || s.players.length >= 6) {
             throw new Error('Partie commencée ou salon complet.');
         }
         
-        const p = newPlayer(req.body.name);
+        const p = newPlayer(req.body.name || req.account.name.slice(0, 20));
+        p.accountId = req.account.id;
+        p.picture = req.account.picture;
         s.players.push(p);
         presence.touch(s, p);
         addLog(s, p.name + ' rejoint la table.');
@@ -1219,6 +1229,7 @@ app.get('/api/state', (req, res) => {
     try {
         const s = getRoom(req.query.code);
         const p = getPlayer(s, req.query.token);
+        if (p.accountId !== req.account.id) return res.status(403).json({code: 'ACCOUNT_MISMATCH', error: 'Cette place appartient à un autre compte Google.'});
         
         if (presence.touch(s, p)) addLog(s, p.name + ' reprend sa place au robot.');
         updatePresence(s);
@@ -1235,7 +1246,7 @@ app.get('/api/state', (req, res) => {
         publicState.players = s.players.map(player => {
             const copy = {};
             for (const k in player) {
-                if (k !== 'token') {
+                if (k !== 'token' && k !== 'accountId') {
                     copy[k] = player[k];
                 }
             }
@@ -1260,6 +1271,7 @@ app.post('/api/action', (req, res) => {
     try {
         const s = getRoom(req.body.code);
         const p = getPlayer(s, req.body.token);
+        if (p.accountId !== req.account.id) return res.status(403).json({code: 'ACCOUNT_MISMATCH', error: 'Cette place appartient à un autre compte Google.'});
         
         if (req.body.type === 'leave') {
             delete p.autoPlay;

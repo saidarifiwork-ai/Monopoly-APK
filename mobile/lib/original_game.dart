@@ -35,7 +35,8 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
   @override
   void initState() {
     super.initState();
-    api = GameApi(serverUri(widget.game.server));
+    api = GameApi(serverUri(widget.game.server))
+      ..authToken = widget.game.authToken;
     transport = RendererTransport(api, widget.game.gameSession);
     WidgetsBinding.instance.addObserver(this);
     unawaited(initialize());
@@ -158,6 +159,7 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
 
   Future<void> forward(Json request) async {
     final result = await transport.handle(request);
+    if (result['status'] == 401) widget.game.onAuthenticationRequired?.call();
     if (!mounted) return;
     await evaluate(
         'window.quartiersResolve(${request['id']}, ${jsonEncode(result)})');

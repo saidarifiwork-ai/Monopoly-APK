@@ -9,23 +9,24 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>Number(n).toLocaleString('fr-FR');
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : (window.API_URL || '');
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
-async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
+async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
 function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 function formatTime(seconds){if(seconds>=60)return Math.floor(seconds/60)+'m '+seconds%60+'s';return seconds+'s'}
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
-async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
+async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
 function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 async function enter(create,mode){
+ if(!window.QuartiersAuth?.allowed){toast('Connectez-vous avec Google pour jouer.');return;}
  if(busy)return;if(!$('#name').value.trim()){toast('Saisissez votre prénom pour jouer.');$('#name').focus();return}
  busy=true;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=true);
- try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode,botLevel:$('#bot-level').value});suspended=false;localStorage.removeItem('quartiers-paused');resetView();session={code:result.code,token:result.token};sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
+ try{if(pollPromise)await pollPromise;const result=await api('/api/'+(create?'create':'join'),{name:$('#name').value.trim(),code:$('#code').value.toUpperCase().trim(),mode,botLevel:$('#bot-level').value});suspended=false;localStorage.removeItem('quartiers-paused');resetView();session={code:result.code,token:result.token,accountId:window.QuartiersAuth?.account?.id};sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));await poll(true)}catch(e){toast(e.message)}finally{busy=false;$('#entry').querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render()}
 }
 async function action(type,index,extra={}){
  if(busy||animating)return;busy=true;render();
  try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type,index,...extra});await poll(true)}catch(e){toast(e.message)}finally{busy=false;if(state)render()}
 }
 function poll(force=false){
- if(pollPromise)return pollPromise;if(!session||suspended||busy&&!force)return Promise.resolve();const ticket=generation,activeSession=session;
+ if(pollPromise)return pollPromise;if(!window.QuartiersAuth?.allowed)return Promise.resolve();if(!session||suspended||busy&&!force)return Promise.resolve();const ticket=generation,activeSession=session;
  pollPromise=(async()=>{try{
   const next=await api('/api/state?code='+activeSession.code+'&token='+activeSession.token);if(ticket!==generation)return;
   $('#connection').textContent='● Connecté · salon privé';
@@ -169,7 +170,7 @@ function render(){
    }
 
    if (p.connectionStatus === 'replaced') statusText = p.autoPlay?'Mode auto':'Robot temporaire · retour possible';
-   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.connectionStatus==='disconnected'?'warning':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}${p.bot&&!p.temporaryBot?' · '+(BOT_LEVELS.find(l=>l[0]===p.botLevel)?.[1]||'Normal'):''}</span>${p.id===s.me&&!p.out&&['opening','playing'].includes(s.phase)?`<label class="auto-toggle"><input type="checkbox" ${p.autoPlay?'checked':''} ${busy||animating?'disabled':''}> 🤖 Mode auto</label>`:''}<small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
+   return `<div class="player ${i===s.turn?'active':''} ${p.out?'out':''} ${p.connectionStatus==='disconnected'?'warning':''}" data-player="${p.id}"><div class="player-pawn" style="color:${colors[i]}">${p.picture?`<img class="player-avatar" src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer">`:art(pawnArts[i])}</div><div><span class="player-name">${esc(p.name)}${p.id===s.me?' · vous':''}${p.bot&&!p.temporaryBot?' · '+(BOT_LEVELS.find(l=>l[0]===p.botLevel)?.[1]||'Normal'):''}</span>${p.id===s.me&&!p.out&&['opening','playing'].includes(s.phase)?`<label class="auto-toggle"><input type="checkbox" ${p.autoPlay?'checked':''} ${busy||animating?'disabled':''}> 🤖 Mode auto</label>`:''}<small>${statusText} · ${s.tiles.filter(t=>t.owner===p.id).length} biens</small></div><span class="money">${money(p.money)}<small>DIRHAMS</small></span></div>`;
  }).join('');
  const autoToggle=$('#players .auto-toggle input');
  if(autoToggle)autoToggle.onchange=()=>action('autoplay',null,{enabled:autoToggle.checked});
@@ -210,7 +211,7 @@ function renderOffers(){const o=state.offer;offerPanel.hidden=!o;if(!o)return;co
  $('#actions').querySelectorAll('button').forEach(b=>b.disabled=true);$('#status').textContent='Le tour reprendra après la négociation.';
 }
 const fullscreen=document.createElement('button');fullscreen.className='secondary';fullscreen.textContent='Plein écran';fullscreen.onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{toast('Utilisez F11 pour le plein écran.')}};$('.table-tools').prepend(fullscreen);
-poll();setInterval(()=>poll(),800);
+window.QuartiersAuth?.ready.then(()=>{if(!document.documentElement.classList.contains('quartiers-mobile'))window.dispatchEvent(new CustomEvent('quartiers-account',{detail:window.QuartiersAuth.account}));poll()});setInterval(()=>poll(),800);
 
 // Keep table controls beside the board, freeing the entire title row.
 const tableTools=document.querySelector('.table-tools');document.querySelector('aside').prepend(tableTools);document.querySelector('.game-top').remove();
@@ -319,3 +320,13 @@ function showVictory(s){
  if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
  gameSound.play('celebration');
 }
+
+// An account switch must never restore another person's locally saved seat.
+window.addEventListener('quartiers-account', event => {
+ if(event.detail){if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session;}
+ else{resetView();session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resumeButton.hidden=true;$('#game').hidden=true;$('#welcome').hidden=false;}
+});
+window.addEventListener('quartiers-auth-expired',()=>{resetView();session=null;$('#game').hidden=true;$('#welcome').hidden=false});
+window.addEventListener('quartiers-before-logout',()=>{generation++;suspended=true;resetView();$('#game').hidden=true;$('#welcome').hidden=false});
+
+window.quartiersLeaveForLogout = async () => {if(session){try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'})}catch(_) {}}};

@@ -13,6 +13,9 @@ on:
       - 'server.js'
       - 'presence.js'
       - 'auction.js'
+      - 'google-client.json'
+      - 'auth.js'
+      - 'auth-web.js'
       - 'bot-ai.js'
       - 'cards.js'
       - 'test/**'
@@ -29,6 +32,9 @@ on:
       - 'server.js'
       - 'presence.js'
       - 'auction.js'
+      - 'google-client.json'
+      - 'auth.js'
+      - 'auth-web.js'
       - 'bot-ai.js'
       - 'cards.js'
       - 'test/**'
@@ -71,7 +77,7 @@ jobs:
       - name: Start shared server
         working-directory: .
         run: |
-          node server.js > /tmp/quartiers-server.log 2>&1 &
+          NODE_ENV=test GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com ACCOUNTS_FILE=/tmp/quartiers-test-accounts.json node --require ./test/fixtures/google-auth-server.cjs server.js > /tmp/quartiers-server.log 2>&1 &
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:8787/api/health; then exit 0; fi
             sleep 1

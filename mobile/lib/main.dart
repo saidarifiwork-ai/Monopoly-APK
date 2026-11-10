@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'original_game.dart';
 import 'game.dart';
+import 'account.dart';
 
 const ink = Color(0xFF183C33);
 const cream = Color(0xFFF7F2E7);
@@ -91,9 +92,13 @@ typedef GameViewBuilder = Widget Function(
 
 class QuartiersApp extends StatelessWidget {
   const QuartiersApp(
-      {super.key, required this.controller, this.gameViewBuilder});
+      {super.key,
+      required this.controller,
+      this.gameViewBuilder,
+      this.accountController});
   final GameController controller;
   final GameViewBuilder? gameViewBuilder;
+  final GoogleAccountController? accountController;
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Quartiers Maroc',
@@ -133,21 +138,31 @@ class QuartiersApp extends StatelessWidget {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
           ),
         ),
-        home:
-            GameHome(controller: controller, gameViewBuilder: gameViewBuilder),
+        home: GameHome(
+            controller: controller,
+            gameViewBuilder: gameViewBuilder,
+            accountController: accountController),
       );
 }
 
 class GameHome extends StatefulWidget {
-  const GameHome({super.key, required this.controller, this.gameViewBuilder});
+  const GameHome(
+      {super.key,
+      required this.controller,
+      this.gameViewBuilder,
+      this.accountController});
   final GameController controller;
   final GameViewBuilder? gameViewBuilder;
+  final GoogleAccountController? accountController;
   @override
   State<GameHome> createState() => _GameHomeState();
 }
 
 class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   GameController get c => widget.controller;
+  late final GoogleAccountController a;
+  bool expiringAccount = false;
+  String? lastAccount;
   final form = GlobalKey<FormState>();
   late final TextEditingController name;
   final room = TextEditingController();
@@ -161,7 +176,60 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     name = TextEditingController(text: c.preferences.getString('name') ?? '');
     WidgetsBinding.instance.addObserver(this);
     c.addListener(onChange);
-    unawaited(c.restore());
+    a = widget.accountController ?? GoogleAccountController();
+    a.addListener(onAccountChange);
+    c.onAuthenticationRequired = () => unawaited(expireAccount());
+    unawaited(restoreAccount());
+  }
+
+  Future<void> restoreAccount() async {
+    await a.restore(c.savedServer);
+    if (!mounted) return;
+    c.setAuthToken(a.token);
+    await c.restore(restoreSession: a.account != null);
+  }
+
+  void onAccountChange() {
+    if (!mounted) return;
+    c.setAuthToken(a.token);
+    if (a.account != null && lastAccount != a.account!['id']) {
+      lastAccount = a.account!['id'] as String;
+      final value = a.account!['name'] as String;
+      name.text = value.length > 20 ? value.substring(0, 20) : value;
+    }
+    if (a.account == null) gameOpened = false;
+    setState(() {});
+  }
+
+  Future<void> signIn() async {
+    await a.signIn(c.savedServer);
+    if (!mounted || a.account == null) return;
+    final previous = c.preferences.getString('google_account_id');
+    if (previous != null && previous != a.account!['id']) await c.leave();
+    await c.preferences
+        .setString('google_account_id', a.account!['id'] as String);
+    c.setAuthToken(a.token);
+    await c.restore();
+  }
+
+  Future<void> expireAccount() async {
+    if (expiringAccount) return;
+    expiringAccount = true;
+    try {
+      await a.signOut();
+      await c.leave();
+    } finally {
+      expiringAccount = false;
+    }
+  }
+
+  Future<void> signOut() async {
+    if (c.state != null) {
+      try {
+        await c.relinquish();
+      } catch (_) {}
+    }
+    await expireAccount();
   }
 
   void onChange() {
@@ -179,6 +247,9 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     c.removeListener(onChange);
+    a.removeListener(onAccountChange);
+    a.dispose();
+    c.onAuthenticationRequired = null;
     c.dispose();
     name.dispose();
     room.dispose();
@@ -223,7 +294,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              unawaited(c.configure(input.text));
+              unawaited(changeServer(input.text));
             },
             child: const Text('Vérifier et connecter'),
           ),
@@ -236,7 +307,15 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     input.dispose();
   }
 
+  Future<void> changeServer(String value) async {
+    await c.configure(value);
+    if (!mounted || c.error != null) return;
+    await a.restore(c.savedServer);
+    c.setAuthToken(a.token);
+  }
+
   Future<void> enter({bool solo = false, bool join = false}) async {
+    if (a.account == null) return;
     if (!form.currentState!.validate()) return;
     if (join &&
         !RegExp(r'^[A-Z2-9]{6}$').hasMatch(room.text.trim().toUpperCase())) {
@@ -303,7 +382,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final state = gameOpened ? c.state : null;
+    final state = gameOpened && a.account != null ? c.state : null;
     return PopScope(
       canPop: state == null,
       onPopInvokedWithResult: (didPop, result) {
@@ -328,7 +407,8 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                 ? (widget.gameViewBuilder?.call(c, leave) ??
                     OriginalGameScreen(game: c, onHome: leave))
                 : Column(children: [
-                    if (c.busy) const LinearProgressIndicator(minHeight: 2),
+                    if (c.busy || a.busy)
+                      const LinearProgressIndicator(minHeight: 2),
                     if (c.error != null)
                       Container(
                           width: double.infinity,
@@ -375,117 +455,174 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (c.state != null) ...[
-                            FilledButton.icon(
-                              onPressed: c.busy
-                                  ? null
-                                  : () => setState(() => gameOpened = true),
-                              icon: const Icon(Icons.play_arrow),
-                              label: const Text('Reprendre ma partie'),
+                          if (a.account == null) ...[
+                            const Text('Bienvenue à la table.',
+                                style: TextStyle(
+                                    fontSize: 25, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 16),
+                            const Text(
+                                'Connectez-vous pour jouer. Votre compte reprend votre nom et votre photo Google.'),
+                            const SizedBox(height: 20),
+                            OutlinedButton.icon(
+                              onPressed: a.busy || c.busy ? null : signIn,
+                              icon: const Text('G',
+                                  style: TextStyle(
+                                      color: Color(0xFF4285F4),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 23)),
+                              label: const Text('Continuer avec Google'),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                                'Compte de jeu gratuit · connexion obligatoire',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 12)),
+                            if (a.error != null)
+                              Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: Text(a.error!,
+                                      style:
+                                          const TextStyle(color: Colors.red))),
+                          ] else ...[
+                            Row(children: [
+                              CircleAvatar(
+                                  backgroundImage:
+                                      (a.account!['picture'] as String? ?? '')
+                                              .isEmpty
+                                          ? null
+                                          : NetworkImage(
+                                              a.account!['picture'] as String),
+                                  child:
+                                      (a.account!['picture'] as String? ?? '')
+                                              .isEmpty
+                                          ? const Icon(Icons.person)
+                                          : null),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                  child: Text(a.account!['name'] as String,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                            ]),
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                    onPressed: c.busy ? null : signOut,
+                                    child: const Text('Se déconnecter'))),
+                            if (c.state != null) ...[
+                              FilledButton.icon(
+                                onPressed: c.busy
+                                    ? null
+                                    : () => setState(() => gameOpened = true),
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Reprendre ma partie'),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            const Text(
+                              'Installez-vous à la table.',
+                              style: TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w800,
+                                color: ink,
+                              ),
                             ),
                             const SizedBox(height: 16),
-                          ],
-                          const Text(
-                            'Installez-vous à la table.',
-                            style: TextStyle(
-                              fontSize: 23,
-                              fontWeight: FontWeight.w800,
-                              color: ink,
+                            TextFormField(
+                              controller: name,
+                              maxLength: 20,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: const InputDecoration(
+                                labelText: 'Votre prénom',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Indiquez votre prénom.'
+                                  : null,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: name,
-                            maxLength: 20,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: const InputDecoration(
-                              labelText: 'Votre prénom',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'Indiquez votre prénom.'
-                                : null,
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            initialValue: botLevel,
-                            decoration: const InputDecoration(
-                                labelText: 'Niveau du robot'),
-                            items: const [
-                              DropdownMenuItem(
-                                  value: 'beginner', child: Text('Débutant')),
-                              DropdownMenuItem(
-                                  value: 'easy', child: Text('Facile')),
-                              DropdownMenuItem(
-                                  value: 'normal', child: Text('Normal')),
-                              DropdownMenuItem(
-                                  value: 'hard', child: Text('Difficile')),
-                              DropdownMenuItem(
-                                  value: 'expert', child: Text('Expert')),
-                              DropdownMenuItem(
-                                  value: 'ultimate', child: Text('Ultime')),
-                            ],
-                            onChanged: c.busy
-                                ? null
-                                : (value) => setState(
-                                    () => botLevel = value ?? 'normal'),
-                          ),
-                          if (botLevel == 'ultimate')
-                            const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: Text(
-                                  'Toi contre deux robots indépendants : chacun joue pour lui.',
-                                  style: TextStyle(color: ink)),
-                            ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: c.busy ? null : () => enter(solo: true),
-                            icon: const Icon(Icons.smart_toy_outlined),
-                            label: Text(botLevel == 'ultimate'
-                                ? 'Affronter deux robots Ultime'
-                                : 'Jouer contre le robot'),
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: c.busy ? null : enter,
-                            icon: const Icon(Icons.group_add_outlined),
-                            label: const Text('Créer un salon entre amis'),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 18),
-                            child: Row(
-                              children: [
-                                Expanded(child: Divider()),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
-                                  child: Text('OU REJOINDRE'),
-                                ),
-                                Expanded(child: Divider()),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: botLevel,
+                              decoration: const InputDecoration(
+                                  labelText: 'Niveau du robot'),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'beginner', child: Text('Débutant')),
+                                DropdownMenuItem(
+                                    value: 'easy', child: Text('Facile')),
+                                DropdownMenuItem(
+                                    value: 'normal', child: Text('Normal')),
+                                DropdownMenuItem(
+                                    value: 'hard', child: Text('Difficile')),
+                                DropdownMenuItem(
+                                    value: 'expert', child: Text('Expert')),
+                                DropdownMenuItem(
+                                    value: 'ultimate', child: Text('Ultime')),
                               ],
+                              onChanged: c.busy
+                                  ? null
+                                  : (value) => setState(
+                                      () => botLevel = value ?? 'normal'),
                             ),
-                          ),
-                          TextField(
-                            controller: room,
-                            maxLength: 6,
-                            textCapitalization: TextCapitalization.characters,
-                            autocorrect: false,
-                            decoration: const InputDecoration(
-                              labelText: 'Code du salon',
-                              prefixIcon: Icon(Icons.meeting_room_outlined),
+                            if (botLevel == 'ultimate')
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: Text(
+                                    'Toi contre deux robots indépendants : chacun joue pour lui.',
+                                    style: TextStyle(color: ink)),
+                              ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed:
+                                  c.busy ? null : () => enter(solo: true),
+                              icon: const Icon(Icons.smart_toy_outlined),
+                              label: Text(botLevel == 'ultimate'
+                                  ? 'Affronter deux robots Ultime'
+                                  : 'Jouer contre le robot'),
                             ),
-                          ),
-                          OutlinedButton(
-                            onPressed: c.busy ? null : () => enter(join: true),
-                            child: const Text('Rejoindre mes amis'),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            c.server.isEmpty
-                                ? 'Connexion Internet requise · configurez votre serveur ⚙'
-                                : 'Connexion Internet requise · ${Uri.parse(c.server).host}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: c.busy ? null : enter,
+                              icon: const Icon(Icons.group_add_outlined),
+                              label: const Text('Créer un salon entre amis'),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 18),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Divider()),
+                                  Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 12),
+                                    child: Text('OU REJOINDRE'),
+                                  ),
+                                  Expanded(child: Divider()),
+                                ],
+                              ),
+                            ),
+                            TextField(
+                              controller: room,
+                              maxLength: 6,
+                              textCapitalization: TextCapitalization.characters,
+                              autocorrect: false,
+                              decoration: const InputDecoration(
+                                labelText: 'Code du salon',
+                                prefixIcon: Icon(Icons.meeting_room_outlined),
+                              ),
+                            ),
+                            OutlinedButton(
+                              onPressed:
+                                  c.busy ? null : () => enter(join: true),
+                              child: const Text('Rejoindre mes amis'),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              c.server.isEmpty
+                                  ? 'Connexion Internet requise · configurez votre serveur ⚙'
+                                  : 'Connexion Internet requise · ${Uri.parse(c.server).host}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
                         ],
                       ),
                     ),

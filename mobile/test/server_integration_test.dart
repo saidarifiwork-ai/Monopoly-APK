@@ -10,17 +10,33 @@ void main() {
     final api = GameApi(serverUri(address));
     addTearDown(api.close);
     await api.health();
+    Future<void> authenticate(GameApi target, String identity) async {
+      final config = await target.request('/api/auth/config');
+      final result = await target.request('/api/auth/google', data: {
+        'credential': 'fixture:$identity',
+        'nonce': config['nonce'],
+        'platform': 'android'
+      });
+      target.authToken = result['token'] as String;
+    }
+
+    await authenticate(api, 'said');
+    final friendApi = GameApi(serverUri(address));
+    addTearDown(friendApi.close);
+    await authenticate(friendApi, 'abdo');
     final host =
         await api.request('/api/create', data: {'name': 'Test Android'});
-    final friend = await api
+    final friend = await friendApi
         .request('/api/join', data: {'name': 'Test ami', 'code': host['code']});
+    GameApi client(Json who) =>
+        who['token'] == friend['token'] ? friendApi : api;
     Future<GameState> state(Json who) async =>
-        GameState(await api.request('/api/state', query: {
+        GameState(await client(who).request('/api/state', query: {
           'code': who['code'] as String,
           'token': who['token'] as String,
         }));
     Future<void> action(Json who, String type) async {
-      await api.request('/api/action', data: {...who, 'type': type});
+      await client(who).request('/api/action', data: {...who, 'type': type});
     }
 
     var s = await state(host);
@@ -47,7 +63,7 @@ void main() {
         s.player['money'] >= tile['price']) {
       await action(current, 'auction');
       await expectLater(action(current, 'end'), throwsA(isA<ApiException>()));
-      await api.request('/api/action',
+      await client(current).request('/api/action',
           data: {...current, 'type': 'bid', 'amount': 1});
       await action(other, 'auctionpass');
       final next = await state(current);

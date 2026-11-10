@@ -5,13 +5,15 @@ import 'package:quartiers_mobile/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'game_test.dart' show fixture;
+import 'account_fakes.dart';
 
 void main() {
   testWidgets('six bot difficulties can be selected on the native welcome',
       (tester) async {
     SharedPreferences.setMockInitialValues({'server': ''});
     final controller = GameController(await SharedPreferences.getInstance());
-    await tester.pumpWidget(QuartiersApp(controller: controller));
+    await tester.pumpWidget(QuartiersApp(
+        controller: controller, accountController: SignedInTestAccount()));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Normal'));
     await tester.tap(find.text('Normal'));
@@ -42,8 +44,10 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
     final c = GameController(await SharedPreferences.getInstance());
-    await tester.pumpWidget(QuartiersApp(controller: c));
+    await tester.pumpWidget(
+        QuartiersApp(controller: c, accountController: SignedInTestAccount()));
     await tester.pump();
+    await tester.enterText(find.byType(TextFormField).first, '');
     await tester.ensureVisible(find.text('Jouer contre le robot'));
     await tester.tap(find.text('Jouer contre le robot'));
     await tester.pump();
@@ -67,6 +71,7 @@ void main() {
         ..connected = true;
       await tester.pumpWidget(QuartiersApp(
           controller: c,
+          accountController: SignedInTestAccount(),
           gameViewBuilder: (game, onHome) =>
               const Center(child: Text('Rendu original embarqué'))));
       await tester.pump();

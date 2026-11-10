@@ -29,7 +29,8 @@ void main() {
     expect(find.text('Réessayer'), findsOneWidget);
     await tester.tap(find.text('Réessayer'));
     await tester.pumpAndSettle();
-    expect(find.text('Jouer contre le robot'), findsOneWidget);
+    expect(find.text('Continuer avec Google'), findsOneWidget);
+    expect(find.text('Jouer contre le robot'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

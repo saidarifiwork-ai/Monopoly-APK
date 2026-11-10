@@ -1,6 +1,16 @@
-# Quartiers Maroc pour Android — version 1.0.14
+# Quartiers Maroc pour Android — version 1.0.15 (préparation Google)
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.14.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/google-required-login/downloads/quartiers-maroc-android-arm64-v1.0.15.apk)
+
+**Cette version exige la nouvelle connexion Google. Elle n'est pas encore
+activée sur le serveur de production : créer les clients OAuth puis appliquer
+[le guide de configuration](../docs/CONNEXION-GOOGLE.md) avant de distribuer cet APK.
+La branche de production conserve l'APK 1.0.14 pendant cette préparation.**
+
+Le compte de jeu est créé après la connexion Google ; le nom et la photo du
+profil sont utilisés sur le web et Android. La connexion est obligatoire pour
+créer, rejoindre et jouer. Un compte Google peut reprendre la même place depuis
+un autre appareil avec le code du salon.
 
 Le nouvel accueil utilise l’image fournie comme fond sur le web et dans l’APK, avec un panneau de commandes lisible.
 
@@ -8,7 +18,7 @@ Expert et Ultime adaptent leurs sorties de prison et leur réserve aux occasions
 
 Six niveaux de robot : Débutant, Facile, Normal, Difficile, Expert et Ultime. Choix avant le solo et niveau individuel par robot dans le salon. Le serveur doit être mis à jour pour appliquer les nouvelles stratégies.
 
-Environ 20 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
+Environ 22 Mo. Android 7 minimum, téléphone ARM64, connexion Internet obligatoire. La signature est identique à la version 1.0.0 publiée ici : installer la mise à jour par-dessus l’application précédente.
 
 Cette version reprend **le vrai plateau du site**, ses pions SVG, les dés, les cartes, les sons et les animations. L’accueil est en Flutter ; les fichiers originaux du jeu sont embarqués dans l’APK. Les commandes sont adaptées au tactile, avec des onglets Biens / Joueurs / Journal / Son et les actions en bas de l’écran.
 

@@ -8,9 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 typedef Json = Map<String, dynamic>;
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.sessionExpired = false});
+  const ApiException(this.message,
+      {this.sessionExpired = false, this.authenticationRequired = false});
   final String message;
   final bool sessionExpired;
+  final bool authenticationRequired;
   @override
   String toString() => message;
 }
@@ -40,6 +42,7 @@ class GameApi {
   GameApi(this.server, {http.Client? client})
       : _client = client ?? http.Client();
   final Uri server;
+  String? authToken;
   final http.Client _client;
 
   Future<Json> request(
@@ -50,10 +53,15 @@ class GameApi {
     try {
       final uri = server.replace(path: path, queryParameters: query);
       final response = await (data == null
-              ? _client.get(uri)
+              ? _client.get(uri, headers: {
+                  if (authToken != null) 'Authorization': 'Bearer $authToken'
+                })
               : _client.post(
                   uri,
-                  headers: {'Content-Type': 'application/json'},
+                  headers: {
+                    'Content-Type': 'application/json',
+                    if (authToken != null) 'Authorization': 'Bearer $authToken'
+                  },
                   body: jsonEncode(data),
                 ))
           .timeout(const Duration(seconds: 30));
@@ -69,8 +77,10 @@ class GameApi {
         final message = result['error'] as String? ?? 'Erreur du serveur.';
         throw ApiException(
           message,
-          sessionExpired:
-              message == 'Salon introuvable' || message == 'Session invalide.',
+          authenticationRequired: result['code'] == 'AUTH_REQUIRED',
+          sessionExpired: result['code'] == 'ACCOUNT_MISMATCH' ||
+              message == 'Salon introuvable' ||
+              message == 'Session invalide.',
         );
       }
       return result;
@@ -130,7 +140,10 @@ class RendererTransport {
       );
       return response(200, result);
     } on ApiException catch (error) {
-      return response(400, {'error': error.message});
+      return response(error.authenticationRequired ? 401 : 400, {
+        'error': error.message,
+        if (error.authenticationRequired) 'code': 'AUTH_REQUIRED'
+      });
     } catch (_) {
       return response(400, {'error': 'Requête du jeu invalide.'});
     }
@@ -192,6 +205,13 @@ class GameController extends ChangeNotifier {
   final SharedPreferences preferences;
   final GameApi Function(Uri) apiFactory;
   GameApi? _api;
+  String? authToken;
+  VoidCallback? onAuthenticationRequired;
+  void setAuthToken(String? value) {
+    authToken = value;
+    _api?.authToken = value;
+  }
+
   Json? _session;
   GameState? state;
   String? error;
@@ -226,14 +246,14 @@ class GameController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> restore() async {
+  Future<void> restore({bool restoreSession = true}) async {
     if (savedServer.isEmpty) return;
     busy = true;
     _notify();
     try {
-      _api = apiFactory(serverUri(savedServer));
+      _api = apiFactory(serverUri(savedServer))..authToken = authToken;
       final saved = preferences.getString('session');
-      if (saved != null) {
+      if (saved != null && restoreSession) {
         final session = jsonDecode(saved) as Json;
         if (session['server'] == server) {
           _session = {'code': session['code'], 'token': session['token']};
@@ -260,12 +280,15 @@ class GameController extends ChangeNotifier {
       await candidate.health();
       await leave();
       _api?.close();
-      _api = candidate;
+      _api = candidate..authToken = authToken;
       candidate = null;
       await preferences.setString('server', server);
       connected = true;
     } catch (e) {
       error = e.toString();
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
     } finally {
       candidate?.close();
       busy = false;
@@ -302,6 +325,9 @@ class GameController extends ChangeNotifier {
       await poll(force: true);
     } catch (e) {
       error = e.toString();
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
     } finally {
       busy = false;
       _schedulePoll();
@@ -328,6 +354,9 @@ class GameController extends ChangeNotifier {
       );
     } catch (e) {
       error = '$e';
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
     } finally {
       // Refresh even after an ambiguous timeout; never resend the command.
       await poll(preserveError: error != null, force: true);
@@ -382,6 +411,12 @@ class GameController extends ChangeNotifier {
       connected = false;
       _failures++;
       error = e.toString();
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
       if (e is ApiException && e.sessionExpired) {
         await leave();
         error =
