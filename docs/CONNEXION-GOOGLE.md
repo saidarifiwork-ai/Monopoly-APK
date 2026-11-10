@@ -1,6 +1,9 @@
 # Activer la connexion Google obligatoire
 
 Le code web et Android est prêt sur la branche `google-required-login`.
+L’identifiant Web fourni est renseigné dans `google-client.json`. Il reste à
+enregistrer le client Android (étape 3) et à configurer l’audience Google avant
+le déploiement commun.
 **La production reste sur sa version actuelle tant que les identifiants Google
 ne sont pas configurés.** Ne déployer cette branche sur Render qu'après les
 étapes ci-dessous : son serveur refuse le jeu anonyme, y compris sans configuration.
