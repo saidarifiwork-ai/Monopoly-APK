@@ -123,3 +123,5 @@ body:has(#welcome:not([hidden])) footer{display:none}
 select{font:inherit;color:var(--ink);background:var(--cream);border:1px solid #cdd4c6;border-radius:6px;padding:10px;width:100%;margin:8px 0 12px}.bot-help{font-size:11px;color:var(--muted);margin:0 0 12px;line-height:1.4}
 
 #game-entry{border:0;padding:0;margin:0;min-width:0}#game-entry[hidden]{display:none}#google-auth{margin-bottom:18px}#google-message{font-size:13px;line-height:1.5}#google-button{min-height:44px}#google-profile{display:flex;flex-wrap:wrap;align-items:center;gap:10px}#google-profile[hidden]{display:none}#google-picture,.player-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover}#google-profile strong{flex:1;overflow-wrap:anywhere}#google-logout{font-size:12px;padding:8px}.player-pawn .player-avatar{width:100%;height:100%;object-fit:cover}
+
+.brand-mark{background:none;transform:none;border-radius:0;box-shadow:none;object-fit:contain;width:48px;height:48px;flex-shrink:0}

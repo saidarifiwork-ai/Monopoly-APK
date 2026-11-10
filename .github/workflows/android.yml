@@ -7,6 +7,9 @@ on:
     paths:
       - 'app.js'
       - 'offer-refused.mp3'
+      - 'logo.png'
+      - 'design/**'
+      - 'favicon*'
       - 'art.js'
       - 'style.css'
       - 'index.html'
@@ -26,6 +29,9 @@ on:
     paths:
       - 'app.js'
       - 'offer-refused.mp3'
+      - 'logo.png'
+      - 'design/**'
+      - 'favicon*'
       - 'art.js'
       - 'style.css'
       - 'index.html'

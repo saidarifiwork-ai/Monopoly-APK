@@ -1,12 +1,14 @@
-# Quartiers Maroc pour Android — version 1.0.15 — connexion Google
+# Quartiers Maroc pour Android — version 1.0.16 — connexion Google
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.15.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.16.apk)
 
 Cette version exige la connexion Google et remplace les anciens APK lors du
 déploiement du serveur avec authentification. Les clients Google Web et Android
 ont été créés ; la configuration de l’audience se fait dans Google Cloud.
 Voir [le guide](../docs/CONNEXION-GOOGLE.md). Les essais réels Google et Android
 restent à effectuer après le déploiement.
+
+Un même logo avec le personnage à moustache est utilisé pour le site, le favori du navigateur et l’APK. Les cartes Chance et Caisse commune sont mélangées avant le tirage de l’ordre et à chaque rejeu ; les anciens paquets sauvegardés sans version sont remélangés une seule fois, sans reprendre les cartes de sortie de prison détenues.
 
 Le compte de jeu est créé après la connexion Google ; le nom et la photo du
 profil sont utilisés sur le web et Android. La connexion est obligatoire pour

@@ -8,6 +8,7 @@ const botAI = require('./bot-ai');
 const {shuffle} = require('./cards');
 const {createAuth} = require('./auth');
 const BOT_ACTION = Symbol('bot action');
+const CARD_SHUFFLE_VERSION = 3;
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -30,6 +31,9 @@ function loadRooms() {
             const data = fs.readFileSync(STORAGE_FILE, 'utf8');
             const parsed = JSON.parse(data);
             rooms = new Map(Object.entries(parsed));
+            for (const s of rooms.values()) {
+                if (['opening', 'playing'].includes(s.phase)) prepareCardDecks(s);
+            }
             console.log(`Loaded ${rooms.size} rooms from storage`);
         }
     } catch (error) {
@@ -302,6 +306,24 @@ function newCardDecks() {
     };
 }
 
+// Saved games from older releases had no shuffle provenance. Migrate each
+// remaining queue once, without replacing cards held by players or resetting
+// anyone's money/position. New games always receive two entirely new decks.
+function prepareCardDecks(s, fresh = false) {
+    if (!fresh && s.cardShuffleVersion === CARD_SHUFFLE_VERSION &&
+        Array.isArray(s.decks?.chance) && Array.isArray(s.decks?.chest)) return;
+    const held = new Set((s.players || []).flatMap(p => (p.jailCards || []).map(c => c.deck)));
+    if (fresh || !s.decks) {
+        s.decks = newCardDecks();
+        if (!fresh) for (const kind of held) s.decks[kind] = s.decks[kind].filter(c => c.effect !== 'free');
+    } else {
+        const missing = ['chance', 'chest'].some(kind => !Array.isArray(s.decks[kind])) ? newCardDecks() : null;
+        s.decks = Object.fromEntries(['chance', 'chest'].map(kind => [kind,
+            Array.isArray(s.decks[kind]) ? shuffle(s.decks[kind]) : missing[kind].filter(c => c.effect !== 'free' || !held.has(kind))]));
+    }
+    s.cardShuffleVersion = CARD_SHUFFLE_VERSION;
+}
+
 function resolveLanding(s, p, multiplier = 1, utilityRoll = false) {
     const t = s.tiles[p.pos];
     
@@ -328,7 +350,7 @@ function resolveLanding(s, p, multiplier = 1, utilityRoll = false) {
 }
 
 function drawCard(s, p, deck) {
-    if (!s.decks) s.decks = newCardDecks();
+    prepareCardDecks(s);
     
     const card = s.decks[deck][0];
     s.decks[deck] = s.decks[deck].slice(1);
@@ -438,7 +460,8 @@ function nextTurn(s) {
 }
 
 function startOpening(s) {
-    s.decks = newCardDecks();
+    prepareCardDecks(s, true);
+    addLog(s, 'Les cartes Chance et Caisse commune ont été mélangées pour cette partie.');
     s.phase = 'opening';
     s.turn = 0;
     s.rolled = false;
@@ -760,9 +783,10 @@ function restartGame(s, p) {
     if (s.phase !== 'finished' || p.id !== s.host) throw new Error('Seul l’hôte peut relancer une partie terminée.');
     const code=s.code, host=s.host, botLevel=s.botLevel || 'normal', lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1;
     const players=s.players.map(player => {
-        const {id, token, name, bot, botLevel, temporaryBot, autoPlay} = player;
+        const {id, token, name, bot, botLevel, temporaryBot, autoPlay, accountId, picture} = player;
         return {...newPlayer(name), id, token, bot: !!bot, ...(botLevel ? {botLevel} : {}),
-            ...(temporaryBot ? {temporaryBot: true} : {}), ...(autoPlay ? {autoPlay: true} : {})};
+            ...(temporaryBot ? {temporaryBot: true} : {}), ...(autoPlay ? {autoPlay: true} : {}),
+            ...(accountId ? {accountId} : {}), ...(picture ? {picture} : {})};
     });
     for (const key of Object.keys(s)) delete s[key];
     Object.assign(s, {code, host, botLevel, players, lastSeen, gameRound, eventSeq,
@@ -1148,7 +1172,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 17, googleLoginRequired: true, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 18, googleLoginRequired: true, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {

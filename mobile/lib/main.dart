@@ -57,6 +57,9 @@ class _AppStartupState extends State<AppStartup> {
                         child: Padding(
                   padding: const EdgeInsets.all(28),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Image.asset('assets/game/logo.png',
+                        width: 96, height: 96, excludeFromSemantics: true),
+                    const SizedBox(height: 20),
                     const Text('QUARTIERS MAROC',
                         style: TextStyle(
                             fontSize: 24,
@@ -391,6 +394,10 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
       child: Scaffold(
         appBar: state == null
             ? AppBar(
+                leading: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Image.asset('assets/game/logo.png',
+                        excludeFromSemantics: true)),
                 title: const Text('QUARTIERS',
                     style: TextStyle(
                         fontWeight: FontWeight.w900, letterSpacing: 2)),

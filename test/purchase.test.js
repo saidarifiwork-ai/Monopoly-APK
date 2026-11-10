@@ -57,10 +57,11 @@ test('payment animation is emitted only when debt is paid, at its original squar
 
 test('host rematch resets the game but preserves the room, players and sessions',()=>{
  const e=engine(),{p,s}=fixture(e),friend=s.players[1];s.code='ROOM';s.host=p.id;s.phase='finished';s.gameRound=2;s.eventSeq=19;
- p.money=2;p.out=true;p.jail=true;p.pos=18;friend.money=9000;s.tiles[5].level=3;s.debts=[{player:p.id,amount:42}];s.offer={buyer:p.id};s.auction={index:5};s.decks={chance:[]};s.turnOrder=[1,0];
+ p.accountId='google-account-a';p.picture='https://lh3.googleusercontent.com/photo';p.money=2;p.out=true;p.jail=true;p.pos=18;friend.money=9000;s.tiles[5].level=3;s.debts=[{player:p.id,amount:42}];s.offer={buyer:p.id};s.auction={index:5};s.decks={chance:[]};s.turnOrder=[1,0];
  const tokens=s.players.map(x=>x.token);assert.throws(()=>e.invokeGameAction(s,friend,{type:'rematch'}));
  e.invokeGameAction(s,p,{type:'rematch'});
  assert.equal(s.phase,'lobby');assert.equal(s.code,'ROOM');assert.equal(s.host,'a');assert.equal(s.gameRound,3);assert.equal(s.eventSeq,19);
+ assert.equal(s.players[0].accountId,'google-account-a');assert.equal(s.players[0].picture,'https://lh3.googleusercontent.com/photo');
  assert.equal(s.players.length,2);assert.equal(s.players[0].token,tokens[0]);assert.equal(s.players[1].token,tokens[1]);
  for(const player of s.players){assert.equal(player.money,1500);assert.equal(player.pos,0);assert.equal(player.out,false);assert.equal(player.jail,false)}
  assert.equal(s.tiles[5].owner,'');assert.equal(s.tiles[5].level,0);assert.equal(s.debts.length,0);assert.equal(s.offer,null);assert.equal(s.auction,undefined);assert.equal(s.decks,undefined);assert.equal(s.turnOrder,undefined);
