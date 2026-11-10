@@ -97,8 +97,12 @@ est prérempli mais reste modifiable. La photo vient exclusivement du profil Goo
 Le cookie web est `HttpOnly`, `SameSite=Lax` et `Secure` en production. Android
 stocke son jeton de session dans le stockage sécurisé du téléphone et l'envoie
 uniquement dans les requêtes natives ; il n'est pas exposé au JavaScript du jeu.
-Une session dure au maximum sept jours ; un redémarrage du serveur impose de se
-reconnecter. La déconnexion invalide immédiatement la session utilisée.
+Une session dure au maximum trente jours. Les empreintes des jetons sont
+sauvegardées dans `SESSIONS_FILE` (par défaut `ACCOUNTS_FILE + '.sessions'`),
+avec l’expiration, le profil et le client Google d’origine. Le fichier ne contient
+pas les jetons utilisables par un navigateur ou un téléphone. Si le fichier est
+conservé, un redémarrage recharge les sessions ; une déconnexion les invalide
+également dans le fichier. Le cookie web possède une expiration persistante.
 
 La même identité Google peut reprendre sa place avec le code du salon, sur un
 autre appareil, même après le début de la partie. Elle ne crée pas un second
@@ -137,3 +141,36 @@ NODE_ENV=test GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com \
 flutter analyze
 flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8787
 ```
+
+
+## Conserver la connexion
+
+Fermer le navigateur ou l’APK ne déconnecte pas volontairement le compte.
+L’APK conserve son jeton et les métadonnées du compte dans le stockage sécurisé.
+Une erreur réseau au démarrage ne les supprime pas. Deux nouvelles tentatives
+sont prévues après un court délai ; « Réessayer ma connexion » reste disponible.
+Si le serveur refuse un ancien jeton, Android tente une authentification Google
+légère, sans ouvrir le sélecteur de comptes. Le compte vérifié doit correspondre
+au compte mémorisé ; le renouvellement silencieux n’accepte pas un autre compte.
+Google peut toutefois imposer une nouvelle interaction ou une nouvelle autorisation.
+
+Le web commence par vérifier son cookie, sans charger Google lorsque la session
+est toujours valide. Une interruption réseau ne supprime pas le code de salon
+mémorisé. Si une connexion Google est à nouveau nécessaire, la sélection
+automatique est proposée uniquement après une connexion antérieure, selon les
+possibilités du navigateur. La déconnexion explicite efface ce choix automatique.
+
+**Limite de Render gratuit :** un fichier local n’est pas une base de données
+durable. Si Render remplace l’instance ou efface son disque éphémère, le fichier
+de sessions peut disparaître. La reprise Google peut alors être nécessaire.
+Pour garantir la conservation après ces événements, un disque persistant ou
+un stockage externe est nécessaire ; cette mise à jour n’en provisionne aucun.
+Avec un disque persistant, placer `ACCOUNTS_FILE`, `SESSIONS_FILE` et `ROOMS_FILE`
+sur le volume conservé. Ne jamais placer ces fichiers dans le répertoire servi
+par Express, ni les ajouter au dépôt Git.
+
+Les tests incluent le redémarrage d’un serveur avec son fichier de sessions,
+la révocation après redémarrage, l’expiration, la fermeture/réouverture d’un onglet,
+la reprise après une erreur réseau et le renouvellement Android simulé. Ces essais
+ne garantissent pas que Google autorisera toujours une connexion silencieuse sur
+un appareil réel.

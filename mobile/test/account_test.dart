@@ -63,7 +63,8 @@ void main() {
             })));
     await controller.signIn('https://game.example');
     expect(controller.account, profile);
-    expect(await store.read('https://game.example'), 'private-app-bearer');
+    expect(jsonDecode((await store.read('https://game.example'))!)['token'],
+        'private-app-bearer');
     await controller.restore('https://game.example');
     expect(controller.account, profile);
     await controller.restore('https://other.example');
@@ -116,4 +117,163 @@ void main() {
       api.close();
     }
   });
+  test(
+      'closing and reopening the APK restores the stored account without opening Google',
+      () async {
+    final store = MemoryAccountTokenStore();
+    final profile = {'id': 'a', 'name': 'Said', 'picture': ''};
+    store.tokens['https://game.example'] =
+        jsonEncode({'token': 'saved-bearer', 'account': profile});
+    var googleCalls = 0;
+    final controller = GoogleAccountController(
+        store: store,
+        login: (_) async {
+          googleCalls++;
+          return null;
+        },
+        silentLogin: (_) async {
+          googleCalls++;
+          return null;
+        },
+        apiFactory: (server) =>
+            GameApi(server, client: MockClient((request) async {
+              expect(request.headers['Authorization'], 'Bearer saved-bearer');
+              return http.Response(jsonEncode({'account': profile}), 200);
+            })));
+    await controller.restore('https://game.example');
+    expect(controller.account, profile);
+    expect(googleCalls, 0);
+    expect(controller.restorePending, isFalse);
+    controller.dispose();
+  });
+
+  test(
+      'a temporary network failure keeps the remembered account for a later retry',
+      () async {
+    final store = MemoryAccountTokenStore();
+    final profile = {'id': 'a', 'name': 'Said', 'picture': ''};
+    final saved = jsonEncode({'token': 'saved-bearer', 'account': profile});
+    store.tokens['https://game.example'] = saved;
+    var offline = true;
+    final controller = GoogleAccountController(
+        store: store,
+        silentLogin: (_) async =>
+            throw StateError('Network errors must not open Google'),
+        apiFactory: (server) =>
+            GameApi(server, client: MockClient((request) async {
+              if (offline) throw http.ClientException('offline');
+              return http.Response(jsonEncode({'account': profile}), 200);
+            })));
+    await controller.restore('https://game.example');
+    expect(controller.account, isNull);
+    expect(controller.restorePending, isTrue);
+    expect(controller.token, 'saved-bearer');
+    expect(await store.read('https://game.example'), saved);
+    offline = false;
+    await controller.restore('https://game.example');
+    expect(controller.account, profile);
+    expect(controller.restorePending, isFalse);
+    controller.dispose();
+  });
+
+  for (final wrongAccount in [false, true]) {
+    test(
+        'an expired server session silently renews only the same remembered Google account: wrong=$wrongAccount',
+        () async {
+      final store = MemoryAccountTokenStore();
+      final original = {'id': 'a', 'name': 'Said', 'picture': ''};
+      store.tokens['https://game.example'] =
+          jsonEncode({'token': 'expired-bearer', 'account': original});
+      final restored = {
+        'id': wrongAccount ? 'b' : 'a',
+        'name': 'Said',
+        'picture': ''
+      };
+      var interactiveCalls = 0, silentCalls = 0, revoked = false;
+      final controller = GoogleAccountController(
+          store: store,
+          login: (_) async {
+            interactiveCalls++;
+            return null;
+          },
+          silentLogin: (_) async {
+            silentCalls++;
+            return 'fresh-google-credential';
+          },
+          apiFactory: (server) =>
+              GameApi(server, client: MockClient((request) async {
+                switch (request.url.path) {
+                  case '/api/auth/me':
+                    return http.Response(
+                        '{"code":"AUTH_REQUIRED","error":"Expired"}', 401);
+                  case '/api/auth/config':
+                    return http.Response(
+                        '{"configured":true,"clientId":"public-client","nonce":"challenge"}',
+                        200);
+                  case '/api/auth/google':
+                    expect(jsonDecode(request.body)['credential'],
+                        'fresh-google-credential');
+                    return http.Response(
+                        jsonEncode(
+                            {'token': 'renewed-bearer', 'account': restored}),
+                        200);
+                  case '/api/auth/logout':
+                    revoked = true;
+                    expect(request.headers['Authorization'],
+                        'Bearer renewed-bearer');
+                    return http.Response('{"ok":true}', 200);
+                  default:
+                    throw StateError('Unexpected request');
+                }
+              })));
+      await controller.restore('https://game.example');
+      expect(interactiveCalls, 0);
+      expect(silentCalls, 1);
+      expect(controller.restorePending, isFalse);
+      if (wrongAccount) {
+        expect(controller.account, isNull);
+        expect(revoked, isTrue);
+        expect(
+            jsonDecode((await store.read('https://game.example'))!)['account']
+                ['id'],
+            'a');
+      } else {
+        expect(controller.account, original);
+        expect(controller.token, 'renewed-bearer');
+      }
+      controller.dispose();
+    });
+  }
+  testWidgets(
+      'a waking server is retried without requiring a new Google selection',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'server': ''});
+    final game = GameController(await SharedPreferences.getInstance());
+    final account = DelayedRestoredAccount();
+    await tester
+        .pumpWidget(QuartiersApp(controller: game, accountController: account));
+    await tester.pumpAndSettle();
+    expect(find.text('Réessayer ma connexion'), findsOneWidget);
+    expect(find.text('Continuer avec Google'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(account.attempts, 2);
+    expect(find.text('Jouer contre le robot'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class DelayedRestoredAccount extends GoogleAccountController {
+  DelayedRestoredAccount() : super(store: MemoryAccountTokenStore());
+  int attempts = 0;
+  @override
+  Future<void> restore(String address) async {
+    attempts++;
+    restorePending = attempts == 1;
+    if (!restorePending) {
+      account = {'id': 'a', 'name': 'Said', 'picture': ''};
+      token = 'test-token';
+    }
+    notifyListeners();
+  }
 }

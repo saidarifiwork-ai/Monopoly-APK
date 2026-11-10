@@ -211,7 +211,7 @@ function renderOffers(){const o=state.offer;offerPanel.hidden=!o;if(!o)return;co
  $('#actions').querySelectorAll('button').forEach(b=>b.disabled=true);$('#status').textContent='Le tour reprendra après la négociation.';
 }
 const fullscreen=document.createElement('button');fullscreen.className='secondary';fullscreen.textContent='Plein écran';fullscreen.onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{toast('Utilisez F11 pour le plein écran.')}};$('.table-tools').prepend(fullscreen);
-window.QuartiersAuth?.ready.then(()=>{if(!document.documentElement.classList.contains('quartiers-mobile'))window.dispatchEvent(new CustomEvent('quartiers-account',{detail:window.QuartiersAuth.account}));poll()});setInterval(()=>poll(),800);
+window.QuartiersAuth?.ready.then(()=>{if(!document.documentElement.classList.contains('quartiers-mobile')&&!window.QuartiersAuth.pending)window.dispatchEvent(new CustomEvent('quartiers-account',{detail:window.QuartiersAuth.account}));poll()});setInterval(()=>poll(),800);
 
 // Keep table controls beside the board, freeing the entire title row.
 const tableTools=document.querySelector('.table-tools');document.querySelector('aside').prepend(tableTools);document.querySelector('.game-top').remove();
@@ -324,9 +324,9 @@ function showVictory(s){
 // An account switch must never restore another person's locally saved seat.
 window.addEventListener('quartiers-account', event => {
  if(event.detail){if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session;}
- else{resetView();session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resumeButton.hidden=true;$('#game').hidden=true;$('#welcome').hidden=false;}
+ else{resetView();resumeButton.hidden=true;$('#game').hidden=true;$('#welcome').hidden=false;}
 });
-window.addEventListener('quartiers-auth-expired',()=>{resetView();session=null;$('#game').hidden=true;$('#welcome').hidden=false});
-window.addEventListener('quartiers-before-logout',()=>{generation++;suspended=true;resetView();$('#game').hidden=true;$('#welcome').hidden=false});
+window.addEventListener('quartiers-auth-expired',()=>{resetView();$('#game').hidden=true;$('#welcome').hidden=false});
+window.addEventListener('quartiers-before-logout',()=>{generation++;suspended=true;session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false});
 
 window.quartiersLeaveForLogout = async () => {if(session){try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'})}catch(_) {}}};

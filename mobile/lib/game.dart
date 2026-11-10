@@ -9,10 +9,13 @@ typedef Json = Map<String, dynamic>;
 
 class ApiException implements Exception {
   const ApiException(this.message,
-      {this.sessionExpired = false, this.authenticationRequired = false});
+      {this.sessionExpired = false,
+      this.authenticationRequired = false,
+      this.statusCode});
   final String message;
   final bool sessionExpired;
   final bool authenticationRequired;
+  final int? statusCode;
   @override
   String toString() => message;
 }
@@ -77,6 +80,7 @@ class GameApi {
         final message = result['error'] as String? ?? 'Erreur du serveur.';
         throw ApiException(
           message,
+          statusCode: response.statusCode,
           authenticationRequired: result['code'] == 'AUTH_REQUIRED',
           sessionExpired: result['code'] == 'ACCOUNT_MISMATCH' ||
               message == 'Salon introuvable' ||

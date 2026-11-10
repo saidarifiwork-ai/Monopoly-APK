@@ -1172,7 +1172,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 18, googleLoginRequired: true, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 19, googleLoginRequired: true, authPersistence: 'file', sessionDays: 30, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {

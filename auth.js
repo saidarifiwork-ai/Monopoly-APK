@@ -3,22 +3,38 @@ const fs = require('node:fs');
 const {OAuth2Client} = require('google-auth-library');
 
 const COOKIE = 'quartiers_account';
-const TTL = 7 * 24 * 60 * 60 * 1000;
+const TTL = 30 * 24 * 60 * 60 * 1000;
 function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./google-client.json').webClientId || '', verifyIdToken,
-    accountsFile = process.env.ACCOUNTS_FILE || '/tmp/quartiers-accounts.json', now = Date.now} = {}) {
+    accountsFile = process.env.ACCOUNTS_FILE || '/tmp/quartiers-accounts.json', sessionsFile = process.env.SESSIONS_FILE, now = Date.now} = {}) {
     const google = new OAuth2Client();
     const verify = verifyIdToken || (token => google.verifyIdToken({idToken: token, audience: clientId}));
     const sessions = new Map(), challenges = new Map();
+    const sessionPath = sessionsFile || accountsFile + '.sessions';
+    const digest = value => crypto.createHash('sha256').update(value).digest('hex');
+    function saveSessions() {
+        // Persist only token hashes: the saved file cannot be used as a bearer.
+        fs.writeFileSync(sessionPath + '.tmp', JSON.stringify({version: 1, sessions: [...sessions]}), {mode: 0o600});
+        fs.renameSync(sessionPath + '.tmp', sessionPath);
+    }
+    if (fs.existsSync(sessionPath)) {
+        const saved = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+        if (saved.version !== 1 || !Array.isArray(saved.sessions)) throw Error('Format du stockage de sessions invalide.');
+        for (const [key, session] of saved.sessions) {
+            if (/^[a-f0-9]{64}$/.test(key) && session?.expires > now() && session.account?.id && session.audience === clientId) sessions.set(key, session);
+        }
+    }
     let accounts = {};
     if (fs.existsSync(accountsFile)) accounts = JSON.parse(fs.readFileSync(accountsFile, 'utf8'));
     const configured = /^[\w-]+\.apps\.googleusercontent\.com$/.test(clientId);
     function cleanup() {
-        for (const [key, value] of sessions) if (value.expires <= now()) sessions.delete(key);
+        let changed = false;
+        for (const [key, value] of sessions) if (value.expires <= now()) {sessions.delete(key);changed = true;}
+        if (changed) saveSessions();
         for (const [key, value] of challenges) if (value.expires <= now()) challenges.delete(key);
     }
     function secure(req) {return req.secure || process.env.NODE_ENV === 'production';}
     function cookie(req, token, age) {
-        return `${COOKIE}=${token}; Path=/api; HttpOnly; SameSite=Lax; Max-Age=${age}${secure(req) ? '; Secure' : ''}`;
+        return `${COOKIE}=${token}; Path=/api; HttpOnly; SameSite=Lax; Max-Age=${age}; Expires=${new Date(now() + age * 1000).toUTCString()}${secure(req) ? '; Secure' : ''}`;
     }
     function token(req) {
         const bearer = req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/);
@@ -35,7 +51,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
     function requireAccount(req, res, next) {
         cleanup();
         if (!configured) return res.status(503).json({code: 'AUTH_CONFIGURATION', error: 'La connexion Google n’est pas encore configurée par le propriétaire du jeu.'});
-        const session = sessions.get(token(req));
+        const session = sessions.get(digest(token(req)));
         if (!session) return res.status(401).json({code: 'AUTH_REQUIRED', error: 'Connectez-vous avec Google pour jouer.'});
         req.account = session.account;
         next();
@@ -78,12 +94,13 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
                 fs.writeFileSync(accountsFile + '.tmp', JSON.stringify(accounts), {mode: 0o600});
                 fs.renameSync(accountsFile + '.tmp', accountsFile);
                 // Limit concurrent device sessions; logout invalidates a bearer
-                // immediately. Restarting the server asks everyone to log in again.
+                // immediately. Sessions are reloaded after a process restart.
                 const previous = [...sessions].filter(([, s]) => s.account.id === id);
                 while (previous.length >= 8) sessions.delete(previous.shift()[0]);
                 if (sessions.size >= 4000) sessions.delete(sessions.keys().next().value);
                 const bearer = crypto.randomBytes(32).toString('base64url');
-                sessions.set(bearer, {account, expires: now() + TTL});
+                sessions.set(digest(bearer), {account, audience: clientId, expires: now() + TTL});
+                saveSessions();
                 res.setHeader('Set-Cookie', cookie(req, bearer, TTL / 1000));
                 res.json({account, ...(platform === 'android' ? {token: bearer} : {})});
             } catch (_) {
@@ -94,7 +111,8 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
             res.set('Cache-Control', 'no-store');res.json({account: req.account});
         });
         app.post('/api/auth/logout', (req, res) => {
-            sessions.delete(token(req));
+            sessions.delete(digest(token(req)));
+            saveSessions();
             res.setHeader('Set-Cookie', cookie(req, '', 0));res.json({ok: true});
         });
         for (const route of ['/api/create', '/api/join', '/api/state', '/api/action']) app.use(route, requireAccount);

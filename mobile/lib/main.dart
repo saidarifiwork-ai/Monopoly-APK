@@ -165,6 +165,9 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   GameController get c => widget.controller;
   late final GoogleAccountController a;
   bool expiringAccount = false;
+  bool restoringAccount = false;
+  Timer? accountRetry;
+  int restoreRetries = 0;
   String? lastAccount;
   final form = GlobalKey<FormState>();
   late final TextEditingController name;
@@ -180,16 +183,33 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     c.addListener(onChange);
     a = widget.accountController ?? GoogleAccountController();
+    a.rememberedAccountId = c.preferences.getString('google_account_id');
     a.addListener(onAccountChange);
-    c.onAuthenticationRequired = () => unawaited(expireAccount());
+    c.onAuthenticationRequired = () => unawaited(restoreAccount());
     unawaited(restoreAccount());
   }
 
   Future<void> restoreAccount() async {
-    await a.restore(c.savedServer);
-    if (!mounted) return;
-    c.setAuthToken(a.token);
-    await c.restore(restoreSession: a.account != null);
+    if (restoringAccount || a.busy || !mounted) return;
+    restoringAccount = true;
+    c.pause(true);
+    accountRetry?.cancel();
+    try {
+      await a.restore(c.savedServer);
+      if (!mounted) return;
+      c.setAuthToken(a.token);
+      if (a.account != null) c.pause(false);
+      await c.restore(restoreSession: a.account != null);
+      if (a.restorePending && restoreRetries++ < 2) {
+        accountRetry = Timer(const Duration(seconds: 5), () {
+          if (mounted) unawaited(restoreAccount());
+        });
+      } else if (a.account != null) {
+        restoreRetries = 0;
+      }
+    } finally {
+      restoringAccount = false;
+    }
   }
 
   void onAccountChange() {
@@ -205,6 +225,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   }
 
   Future<void> signIn() async {
+    accountRetry?.cancel();
     await a.signIn(c.savedServer);
     if (!mounted || a.account == null) return;
     final previous = c.preferences.getString('google_account_id');
@@ -212,11 +233,13 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     await c.preferences
         .setString('google_account_id', a.account!['id'] as String);
     c.setAuthToken(a.token);
+    c.pause(false);
     await c.restore();
   }
 
   Future<void> expireAccount() async {
     if (expiringAccount) return;
+    accountRetry?.cancel();
     expiringAccount = true;
     try {
       await a.signOut();
@@ -248,6 +271,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
       c.pause(c.state != null || state != AppLifecycleState.resumed);
   @override
   void dispose() {
+    accountRetry?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     c.removeListener(onChange);
     a.removeListener(onAccountChange);
@@ -404,7 +428,8 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                 actions: [
                   IconButton(
                       tooltip: 'Configurer le serveur',
-                      onPressed: c.busy || settingsOpen ? null : configure,
+                      onPressed:
+                          c.busy || a.busy || settingsOpen ? null : configure,
                       icon: const Icon(Icons.settings_outlined))
                 ],
               )
@@ -470,15 +495,30 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                             const Text(
                                 'Connectez-vous pour jouer. Votre compte reprend votre nom et votre photo Google.'),
                             const SizedBox(height: 20),
-                            OutlinedButton.icon(
-                              onPressed: a.busy || c.busy ? null : signIn,
-                              icon: const Text('G',
-                                  style: TextStyle(
-                                      color: Color(0xFF4285F4),
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 23)),
-                              label: const Text('Continuer avec Google'),
-                            ),
+                            if (a.restorePending) ...[
+                              Text(a.rememberedAccount == null
+                                  ? 'Reprise de votre connexion…'
+                                  : 'Reconnexion de ${a.rememberedAccount!['name']}…'),
+                              const SizedBox(height: 12),
+                              FilledButton.icon(
+                                  onPressed: a.busy || c.busy
+                                      ? null
+                                      : () {
+                                          restoreRetries = 0;
+                                          unawaited(restoreAccount());
+                                        },
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Réessayer ma connexion')),
+                            ] else
+                              OutlinedButton.icon(
+                                onPressed: a.busy || c.busy ? null : signIn,
+                                icon: const Text('G',
+                                    style: TextStyle(
+                                        color: Color(0xFF4285F4),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 23)),
+                                label: const Text('Continuer avec Google'),
+                              ),
                             const SizedBox(height: 12),
                             const Text(
                                 'Compte de jeu gratuit · connexion obligatoire',
