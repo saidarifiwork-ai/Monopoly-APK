@@ -1,12 +1,15 @@
 # Activer la connexion Google obligatoire
 
-Le code web et Android est prêt sur la branche `google-required-login`.
-L’identifiant Web fourni est renseigné dans `google-client.json`. Il reste à
-enregistrer le client Android (étape 3) et à configurer l’audience Google avant
-le déploiement commun.
-**La production reste sur sa version actuelle tant que les identifiants Google
-ne sont pas configurés.** Ne déployer cette branche sur Render qu'après les
-étapes ci-dessous : son serveur refuse le jeu anonyme, y compris sans configuration.
+La connexion obligatoire est publiée dans le dépôt commun, sur
+`flutter-android-download`, avec l’APK 1.0.15. Le client Web est renseigné dans
+`google-client.json` et le propriétaire a créé le client Android dans Google Cloud.
+La disponibilité du nouveau serveur dépend du déploiement Render ; la vraie
+connexion Google et l’inscription Android restent à vérifier sur les appareils.
+
+**Audience Google** : en mode Test, ajouter les comptes autorisés dans
+« Audience → Utilisateurs de test ». Pour permettre aux autres joueurs de se
+connecter, publier l’application depuis « Audience » lorsque la console le permet.
+Le mode de l’audience est géré dans Google Cloud, pas dans le code du jeu.
 
 ## 1. Créer le projet Google
 
@@ -61,9 +64,8 @@ depuis le serveur. Il n'a besoin ni d'un secret client ni de `google-services.js
 
 ## 4. Raccorder l'identifiant et activer le code
 
-Transmets-moi **l'identifiant client Web public** après avoir enregistré les deux
-clients Google. Je pourrai renseigner `webClientId` dans `google-client.json`,
-puis publier la mise à jour commune. Le serveur et l'APK lisent cette même valeur ;
+L’identifiant client Web public fourni est renseigné dans `webClientId` de
+`google-client.json`. Le serveur et l'APK lisent cette même valeur ;
 aucun nouvel APK n'est nécessaire pour ajouter cet identifiant public.
 
 Pour une configuration manuelle, la variable Render `GOOGLE_CLIENT_ID` prend le
@@ -71,9 +73,9 @@ pas sur ce fichier. `PUBLIC_ORIGIN` peut préciser l'origine du site si nécessa
 sur Render elle est normalement déduite de `RENDER_EXTERNAL_URL`. Conserver
 `NODE_ENV=production`. Ne jamais ajouter de secret Google à `google-client.json`.
 
-Ensuite intégrer la branche `google-required-login` à `flutter-android-download`
-et déployer cette dernière sur Render. Cette intégration n'a pas été effectuée
-avant la création de ton projet Google pour conserver un site jouable.
+La branche de connexion Google est intégrée à `flutter-android-download`.
+Render doit déployer cette branche ; vérifier le statut « Live » sur la dernière
+mise à jour.
 L'URL `/api/auth/config` doit alors indiquer `configured: true`.
 Faire cette bascule après la fin des parties en cours : les anciennes places,
 créées sans compte Google, ne sont pas attribuées à un compte sur la seule base

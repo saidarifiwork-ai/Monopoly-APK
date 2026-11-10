@@ -16,12 +16,13 @@ explicite de l'utilisateur.
 - Tester le serveur partagé et l'APK : `flutter analyze`, puis `flutter test
   --dart-define=SMOKE_SERVER=http://127.0.0.1:8787` depuis `mobile/` avec un serveur
   local actif. Vérifier aussi le rendu navigateur pour les changements visuels.
-- La branche de préparation Google exige une identité vérifiée côté serveur.
+- Le web et Android exigent une identité Google vérifiée côté serveur.
   Pour les tests d'API locaux uniquement, démarrer le serveur avec `NODE_ENV=test
   GOOGLE_CLIENT_ID=test-client.apps.googleusercontent.com node --require
   ./test/fixtures/google-auth-server.cjs server.js`. Ne jamais utiliser ce
-  vérificateur fictif en production. Le déploiement attend les clients OAuth Web
-  et Android réels ; voir `docs/CONNEXION-GOOGLE.md`.
+  vérificateur fictif en production. Les clients OAuth Web et
+  Android sont créés ; vérifier le déploiement et l’audience selon
+  `docs/CONNEXION-GOOGLE.md`.
 - Pour livrer une modification embarquée, augmenter la version Android, compiler
   un APK ARM64, conserver la signature des APK publiés, publier le fichier et sa
   somme SHA-256 dans `downloads/`, puis vérifier le téléchargement distant.

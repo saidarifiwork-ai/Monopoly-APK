@@ -1,11 +1,12 @@
-# Quartiers Maroc pour Android — version 1.0.15 (préparation Google)
+# Quartiers Maroc pour Android — version 1.0.15 — connexion Google
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/google-required-login/downloads/quartiers-maroc-android-arm64-v1.0.15.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.15.apk)
 
-**Cette version exige la nouvelle connexion Google. Elle n'est pas encore
-activée sur le serveur de production : créer les clients OAuth puis appliquer
-[le guide de configuration](../docs/CONNEXION-GOOGLE.md) avant de distribuer cet APK.
-La branche de production conserve l'APK 1.0.14 pendant cette préparation.**
+Cette version exige la connexion Google et remplace les anciens APK lors du
+déploiement du serveur avec authentification. Les clients Google Web et Android
+ont été créés ; la configuration de l’audience se fait dans Google Cloud.
+Voir [le guide](../docs/CONNEXION-GOOGLE.md). Les essais réels Google et Android
+restent à effectuer après le déploiement.
 
 Le compte de jeu est créé après la connexion Google ; le nom et la photo du
 profil sont utilisés sur le web et Android. La connexion est obligatoire pour
