@@ -641,7 +641,7 @@ function invokeTradeAction(s, p, data) {
         o.amount = data.amount;
         o.respondent = p.id === o.buyer ? o.seller : o.buyer;
         if (o.botInitiated) o.botDeadline = Date.now() + 45000;
-        addLog(s, p.name + ' propose maintenant ' + o.amount + ' DH.');
+        addLog(s, p.name + ' propose maintenant ' + o.amount + ' DH' + (o.offered.length ? ' + ' + o.offered.map(i => s.tiles[i].name).join(', ') : '') + ' pour ' + t.name + '.');
         return;
     }
     
@@ -1145,7 +1145,7 @@ setInterval(() => {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 15, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 3, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.json({app: 'quartiers', version: 16, autoTradePolicy: 'reject-human-auto', cardShuffle: 2, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.post('/api/create', (req, res) => {

@@ -85,3 +85,36 @@ constructions et décisions courantes du mode auto ne sont pas modifiés.
 Dès que l’humain reprend le contrôle, il peut à nouveau négocier lui-même.
 Les robots adversaires permanents continuent d’utiliser leurs stratégies d’échange.
 Cette règle côté serveur est commune au web, à l’APK et au PC, sans nouvelle APK.
+
+
+## Négociations et construction après l’échange
+
+Expert et Ultime évaluent les groupes et la trésorerie des **deux** participants
+après le paiement et le transfert des terrains. Une projection de constructions
+équilibrées estime les loyers accessibles, le coût des levées d’hypothèque et les
+positions publiques des adversaires. Les biens adverses inutilisés qui peuvent
+être hypothéqués sont également pris en compte : dépenser son argent disponible
+ne signifie pas toujours perdre sa capacité de construire.
+
+Quand la vente offre le dernier terrain d’un groupe adverse, Ultime exige un
+prix qui limite le financement d’une construction immédiate, sauf si l’échange
+améliore suffisamment son propre potentiel de revenu. Expert applique cette
+protection avec davantage de souplesse. Le prix varie avec la situation ; il ne
+consiste pas à réclamer systématiquement tout l’argent du joueur.
+
+Le robot peut proposer un ou deux terrains échangeables en complément de
+l’argent, par exemple Victoria contre Safi s’il possède déjà Casablanca. Il peut
+aussi retirer un terrain d’une offre qu’il reçoit en tant qu’acheteur. Il compare
+les propositions, vérifie les fonds disponibles et refuse si aucune solution
+acceptable n’existe. Les contre-offres ne transfèrent rien sans acceptation ; les
+terrains hypothéqués ou les groupes portant des bâtiments restent protégés par
+les règles d’échange. Les biens demandés figurent dans le panneau de négociation
+et dans le journal. Répéter une offre basse ne fait pas céder le robot.
+
+Cette stratégie est la même face à un humain ou à un autre robot. Elle utilise
+les informations publiques et des heuristiques de projection ; elle ne garantit
+aucun taux de victoire et n’intervient pas sur les dés ou les cartes.
+
+La modification s’exécute sur le serveur commun : elle est compatible avec
+l’APK 1.0.14 actuel, sans nouveau téléchargement. L’API `/api/health` indique
+`botStrategy: 4` après le déploiement.
