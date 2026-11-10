@@ -132,5 +132,96 @@ test('normal trade is available after a human takes back control, while permanen
  p.bot=true;p.temporaryBot=true;presence.touch(s,p,1000);assert(!p.bot);
  e.invokeGameAction(s,p,{type:'offer',index:1,amount:100});e.invokeGameAction(s,other,{type:'acceptoffer'});assert.equal(s.tiles[1].owner,p.id);
  other.bot=true;other.botLevel='ultimate';s.tiles[3].owner=other.id;
+ p.money=10000; // This is a genuine, affordable generous bid.
  assert.equal(ai.tradeDecision(s,other,{index:3,seller:other.id,buyer:p.id,amount:10000,offered:[]}).type,'acceptoffer');
+});
+
+test('Expert and Ultimate do not sell Safi for 500 when it funds an opposing monopoly',()=>{
+ for(const level of ['expert','ultimate']){
+  const {p,other,s}=fixture(level);p.bot=true;s.tiles[18].owner=p.id;
+  for(const i of [16,19])s.tiles[i].owner=other.id;
+  other.money=1500;
+  const offer={index:18,seller:p.id,buyer:other.id,amount:500,offered:[]};
+  const before=JSON.stringify(s),decision=ai.tradeDecision(s,p,offer);
+  assert.equal(decision.type,'counteroffer');assert(decision.amount>=1200);
+  assert(decision.amount<=other.money);assert.deepEqual(decision.offered,[]);
+  assert.equal(JSON.stringify(s),before,'planning cannot move money, land or houses');
+  assert.equal(ai.tradeDecision(s,p,{...offer,...decision}).type,'acceptoffer');
+ }
+});
+
+test('the price depends on development funds, not just face value or taking all cash',()=>{
+ const {p,other,s}=fixture();s.tiles[18].owner=p.id;for(const i of [16,19])s.tiles[i].owner=other.id;
+ const offer={index:18,seller:p.id,buyer:other.id,amount:500,offered:[]};
+ other.money=500;assert.equal(ai.tradeDecision(s,p,offer).type,'acceptoffer');
+ other.money=1500;assert.notEqual(ai.tradeDecision(s,p,offer).type,'acceptoffer');
+ // An isolated unremarkable city is still tradable at a reasonable price.
+ s.tiles[1].owner=p.id;assert.equal(ai.tradeDecision(s,p,{...offer,index:1,amount:150}).type,'acceptoffer');
+});
+
+test('Ultimate can request Victoria plus cash and the existing trade API executes exactly those terms',()=>{
+ const {e,p,other,s}=fixture();p.bot=true;p.name='Ultime';other.name='Said';
+ s.tiles[18].owner=p.id;s.tiles[37].owner=p.id;
+ for(const i of [16,19,39])s.tiles[i].owner=other.id;
+ const cash=p.money+other.money;
+ e.invokeGameAction(s,other,{type:'offer',index:18,amount:350});e.invokeBotStep(s);
+ assert(s.offer);assert.equal(s.offer.respondent,other.id);
+ assert(s.offer.offered.includes(39),'request Victoria to complete Casablanca/Victoria');
+ assert(s.offer.amount>=300&&s.offer.amount<1000,'a reciprocal monopoly can justify less cash');
+ assert(s.log.at(-1).includes('Victoria'));assert(s.log.at(-1).includes('Safi'));
+ const price=s.offer.amount,beforeBuyer=other.money,beforeSeller=p.money;
+ assert.equal(s.tiles[39].owner,other.id,'counteroffers require consent');
+ e.invokeGameAction(s,other,{type:'acceptoffer'});
+ assert.equal(s.tiles[18].owner,other.id);assert.equal(s.tiles[39].owner,p.id);
+ assert.equal(other.money,beforeBuyer-price);assert.equal(p.money,beforeSeller+price);
+ assert.equal(p.money+other.money,cash);assert.equal(s.offer,null);
+});
+
+test('strategic mixed counters never demand mortgaged land or a group with buildings',()=>{
+ for(const blocked of ['mortgage','building']){
+  const {p,other,s}=fixture();s.tiles[18].owner=p.id;s.tiles[37].owner=p.id;
+  for(const i of [16,19,39])s.tiles[i].owner=other.id;
+  if(blocked==='mortgage')s.tiles[39].mortgaged=true;else s.tiles[39].level=1;
+  const decision=ai.tradeDecision(s,p,{index:18,seller:p.id,buyer:other.id,amount:350,offered:[]});
+  assert(!decision.offered?.includes(39));
+ }
+});
+
+test('idle mortgage collateral cannot hide the funds for a dangerous new monopoly',()=>{
+ const {p,other,s}=fixture();s.tiles[18].owner=p.id;
+ for(const i of [16,19,5,15,25,35,12,28])s.tiles[i].owner=other.id;
+ // Almost all cash is offered, but idle stations and utilities could fund houses.
+ other.money=1500;
+ assert.notEqual(ai.tradeDecision(s,p,{index:18,seller:p.id,buyer:other.id,amount:1350,offered:[]}).type,'acceptoffer');
+});
+
+test('opponents are evaluated equally, quotes stay affordable and repeated low bids do not cause capitulation',()=>{
+ const {e,p,other,s}=fixture();p.bot=true;s.tiles[18].owner=p.id;for(const i of [16,19])s.tiles[i].owner=other.id;
+ const offer={index:18,seller:p.id,buyer:other.id,respondent:p.id,amount:500,offered:[]};
+ const human=ai.tradeDecision(s,p,offer);other.bot=true;other.botLevel='ultimate';
+ assert.deepEqual(ai.tradeDecision(s,p,offer),human);other.bot=false;
+ s.offer={...offer,botCounterRounds:2};e.invokeBotStep(s);
+ assert.equal(s.offer,null);assert.equal(s.tiles[18].owner,p.id);assert.equal(other.money,1500);
+ other.money=10;
+ const small=ai.tradeDecision(s,p,offer);assert(small.type==='rejectoffer'||small.amount<=10);
+});
+
+
+test('a buying robot removes a concession that would fund a stronger opposing monopoly',()=>{
+ const {p,other,s}=fixture();s.tiles[18].owner=other.id;s.tiles[37].owner=other.id;
+ for(const i of [16,19,39])s.tiles[i].owner=p.id;
+ const offer={index:18,buyer:p.id,seller:other.id,amount:500,offered:[39]};
+ const decision=ai.tradeDecision(s,p,offer);
+ assert.equal(decision.type,'counteroffer');assert(!decision.offered.includes(39));
+ assert(decision.amount>0&&decision.amount<=p.money);
+ assert.equal(ai.tradeDecision(s,p,{...offer,...decision}).type,'acceptoffer');
+});
+
+
+test('payment must not cheaply finance a rival building spree on an existing monopoly',()=>{
+ const {p,other,s}=fixture();p.pos=10;s.tiles[1].owner=other.id;other.money=210;
+ for(const i of [16,18,19]){s.tiles[i].owner=other.id;s.tiles[i].level=2;}
+ // Even a small purchase can fund the jump from two to three houses.
+ const decision=ai.tradeDecision(s,p,{index:1,buyer:p.id,seller:other.id,amount:50,offered:[]});
+ assert.notEqual(decision.type,'acceptoffer');
 });
