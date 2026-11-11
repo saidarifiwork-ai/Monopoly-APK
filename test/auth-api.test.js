@@ -13,7 +13,7 @@ async function gameServer(t){
    return {getPayload:()=>({sub:identity,name:identity.toUpperCase(),nonce,aud:'test.apps.googleusercontent.com',iss:'https://accounts.google.com',exp:Date.now()/1000+3600,picture:'https://lh3.googleusercontent.com/photo'})};
   }})};
   return require(name.startsWith('.')?path.resolve(__dirname,'..',name):name);
- },process:{env:{}},console:{log(){},error:console.error},setInterval:()=>({unref(){}})};
+ },Math:Object.create(Math),process:{env:{}},console:{log(){},error:console.error},setInterval:()=>({unref(){}})};
  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8')+'\nglobalThis.testing={getRoom,invokeGameAction};',sandbox);
  await new Promise(r=>server.once('listening',r));
  t.after(()=>{server.closeAllConnections();server.close();fs.rmSync(dir,{recursive:true,force:true});});
@@ -29,7 +29,7 @@ async function gameServer(t){
   return {...response.body,...(response.cookie?{cookie:response.cookie.split(';')[0]}:{})};
  }
  const state=(seat,auth)=>call('/api/state?code='+seat.code+'&token='+seat.token,null,auth);
- return {call,login,state,engine:sandbox.testing};
+ return {call,login,state,engine:sandbox.testing,setDice(value){sandbox.Math.random=value===null?Math.random:()=>value;}};
 }
 
 test('the real game API binds seats to Google accounts, resumes across devices and hides account IDs',async t=>{
@@ -154,4 +154,32 @@ test('only server-verified solo victories unlock the next level across devices a
  const practice=engine.getRoom(custom.code);practice.phase='playing';practice.turn=0;practice.debts=[{player:practice.players[1].id,receiver:practice.players[0].id,amount:100000}];engine.invokeGameAction(practice,practice.players[1],{type:'bankrupt'});await state(custom,other);
  assert.deepEqual((await progress(other)).completedLevels,[]);
  assert.equal((await call('/api/progression')).status,401);
+});
+
+test('new games deliver the server-shuffled first card through both web cookies and Android bearer sessions',async t=>{
+ const {call,login,state,engine,setDice}=await gameServer(t),web=await login('said','web'),phone=await login('said'),friend=await login('abdo');
+ const seen={chance:new Set(),chest:new Set()},codes=new Set();
+ for(let match=0;match<24;match++) {
+  for(const [kind,positions] of Object.entries({chance:[7,22,36],chest:[2,17,33]})) {
+   const account=match%2?phone:web;
+   const created=await call('/api/create',{},account);assert.equal(created.status,200);const seat=created.body;codes.add(seat.code);
+   assert.equal((await call('/api/join',{code:seat.code},friend)).status,200);
+   assert.equal((await call('/api/action',{...seat,type:'start'},account)).status,200);
+   const room=engine.getRoom(seat.code);
+   assert.equal(room.phase,'opening');assert.equal(room.cardShuffleVersion,4);
+   assert.equal(room.decks.chance.length,16);assert.equal(room.decks.chest.length,16);
+   const top=room.decks[kind][0].title;seen[kind].add(top);
+   // Only select the square and turn in the private fixture. The actual roll,
+   // draw, effect and event travel through the authenticated production routes.
+   room.phase='playing';room.turn=0;room.players[0].pos=positions[match%3]-2;
+   setDice(0);
+   try {assert.equal((await call('/api/action',{...seat,type:'roll'},account)).status,200);}
+   finally {setDice(null);}
+   const publicState=(await state(seat,account)).body;
+   assert.equal(publicState.events.find(event=>event.type==='card').title,top);
+   assert(!('decks' in publicState));
+  }
+ }
+ assert.equal(codes.size,48);
+ for(const kind of ['chance','chest'])assert(seen[kind].size>3,`${kind}: fresh API-created games cannot have a fixed first card`);
 });

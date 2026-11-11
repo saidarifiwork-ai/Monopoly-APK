@@ -32,6 +32,9 @@ La correction concerne le serveur : aucun nouvel APK n’est nécessaire.
 les replays, les six cases, l’indépendance des salons, les sauvegardes tronquées
 ou dupliquées et le retour des cartes de prison. Il exerce aussi le véritable
 mélange cryptographique, indépendamment des tests à hasard contrôlé.
+`node --test test/auth-api.test.js` crée aussi 48 nouveaux salons par les API
+authentifiées web et Android et vérifie les premières cartes effectivement
+envoyées aux clients sur les six cases.
 
 Avec `POSTGRES_TEST_URL` pointant exclusivement vers une base de test séparée,
 `node --test test/database.test.js` vérifie la réparation des documents
