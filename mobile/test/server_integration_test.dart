@@ -98,18 +98,25 @@ void main() {
             query: {'code': claimed['code'], 'token': claimed['token']}),
         throwsA(isA<ApiException>().having((e) => e.seatMoved, 'moved', true)));
 
+    final progression = await api.request('/api/progression');
+    expect(progression['progression']['unlockedLevels'], ['beginner']);
+    await expectLater(
+        api.request('/api/create',
+            data: {'mode': 'solo', 'botLevel': 'ultimate'}),
+        throwsA(
+            isA<ApiException>().having((e) => e.statusCode, 'locked', 403)));
     final solo = await api.request('/api/create',
-        data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'ultimate'});
+        data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'beginner'});
     s = await state(solo);
     expect(s.phase, 'opening');
-    expect(s.players.where((p) => p['bot'] == true).length, 4);
+    expect(s.players.where((p) => p['bot'] == true).length, 1);
     expect(
         s.players
             .where((p) => p['bot'] == true)
-            .every((p) => p['botLevel'] == 'ultimate'),
+            .every((p) => p['botLevel'] == 'beginner'),
         isTrue);
     expect(
-        s.players.firstWhere((p) => p['bot'] == true)['botLevel'], 'ultimate');
+        s.players.firstWhere((p) => p['bot'] == true)['botLevel'], 'beginner');
     final bots =
         s.players.where((p) => p['bot'] == true).map((p) => p['id']).toSet();
     final deadline = DateTime.now().add(const Duration(seconds: 55));

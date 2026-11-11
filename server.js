@@ -9,6 +9,7 @@ const botAI = require('./bot-ai');
 const {shuffle} = require('./cards');
 const {createAuth} = require('./auth');
 const {openDatabase} = require('./database');
+const soloProgression = require('./solo-progression');
 const BOT_ACTION = Symbol('bot action');
 const CARD_SHUFFLE_VERSION = 3;
 
@@ -20,9 +21,9 @@ app.use(cors());
 app.use(express.json());
 app.set('trust proxy', 1);
 const authRouter = express.Router();
-let database = null;
+let database = null, accountAuth;
 let storageReady = !process.env.DATABASE_URL;
-if (!process.env.DATABASE_URL) createAuth().install(authRouter);
+if (!process.env.DATABASE_URL) {accountAuth = createAuth();accountAuth.install(authRouter);}
 app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (!storageReady || (database && !database.healthy)) {
@@ -56,15 +57,27 @@ function loadRooms() {
 }
 
 // Save rooms to storage
-function saveRooms() {
-    if (!storageReady) return Promise.resolve();
+function persistRooms() {
     if (database) return database.save('rooms', Object.fromEntries(rooms));
-    try {
-        const obj = Object.fromEntries(rooms);
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify(obj), 'utf8');
-    } catch (error) {
-        console.error('Error saving rooms:', error);
+    try {fs.writeFileSync(STORAGE_FILE, JSON.stringify(Object.fromEntries(rooms)), 'utf8');}
+    catch (_) {const error = new Error('Sauvegarde temporairement indisponible.');error.status = 503;error.code = 'STORAGE_UNAVAILABLE';throw error;}
+}
+async function saveRooms() {
+    if (!storageReady) return;
+    // Capture the authoritative result before a concurrent replay changes the room.
+    const wins = [...rooms.values()].map(room => ({room, win: soloProgression.result(room)}))
+        .filter(({room, win}) => win && room.soloUnlock?.gameId !== win.gameId);
+    await persistRooms();
+    if (!wins.length) return;
+    const recorded = await accountAuth.recordSoloWins(wins.map(entry => entry.win));
+    let marked = false;
+    for (const entry of wins) {
+        const award = recorded.find(win => win.accountId === entry.win.accountId && win.gameId === entry.win.gameId);
+        if (award && entry.room.phase === 'finished' && (entry.room.gameRound || 0) === Number(award.gameId.split(':')[1])) {
+            entry.room.soloUnlock = {gameId: award.gameId, level: award.level, nextLevel: award.nextLevel};marked = true;
+        }
     }
+    if (marked) await persistRooms();
 }
 
 // Auto-save every 5 seconds
@@ -808,7 +821,7 @@ function invokeFinanceAction(s, p, data) {
 
 function restartGame(s, p) {
     if (s.phase !== 'finished' || p.id !== s.host) throw new Error('Seul l’hôte peut relancer une partie terminée.');
-    const code=s.code, host=s.host, botLevel=s.botLevel || 'normal', lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1;
+    const code=s.code, host=s.host, botLevel=s.botLevel || 'normal', lastSeen=s.lastSeen, eventSeq=s.eventSeq || 0, gameRound=(s.gameRound || 0)+1, soloChallenge=s.soloChallenge;
     const players=s.players.map(player => {
         const {id, token, name, bot, botLevel, temporaryBot, autoPlay, accountId, picture, previousTokenHashes, lastPlayedAt} = player;
         return {...newPlayer(name), id, token, bot: !!bot, ...(botLevel ? {botLevel} : {}),
@@ -817,7 +830,7 @@ function restartGame(s, p) {
             ...(previousTokenHashes ? {previousTokenHashes} : {}), ...(lastPlayedAt ? {lastPlayedAt} : {})};
     });
     for (const key of Object.keys(s)) delete s[key];
-    Object.assign(s, {code, host, botLevel, players, lastSeen, gameRound, eventSeq,
+    Object.assign(s, {code, host, botLevel, ...(soloChallenge ? {soloChallenge} : {}), players, lastSeen, gameRound, eventSeq,
         tiles:newTiles(), turn:0, phase:'lobby', rolled:false, dice:[5,3],
         log:[p.name+' relance une partie.'], events:[], botPhase:'buy', botNext:0, debts:[], offer:null});
 }
@@ -851,6 +864,7 @@ function invokeGameAction(s, p, data) {
     }
     
     if (data.type === 'addbot') {
+        if (s.soloChallenge) throw new Error('Les adversaires du défi solo ne peuvent pas être modifiés.');
         if (s.phase !== 'lobby' || p.id !== s.host || s.players.length >= 6) {
             throw new Error('Ajout du robot impossible.');
         }
@@ -1215,7 +1229,7 @@ async function claimAccountSeat(s, p) {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 23, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 5, ultimateSoloOpponents: 4, botLevels: botAI.LEVELS.map(({id,name,opponents,lookahead})=>({id,name,soloOpponents:opponents,lookahead}))});
+    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 24, soloProgression: true, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 5, ultimateSoloOpponents: 4, botLevels: botAI.LEVELS.map(({id,name,opponents,lookahead})=>({id,name,soloOpponents:opponents,lookahead}))});
 });
 
 app.get('/api/my-games', (req, res) => {
@@ -1229,7 +1243,12 @@ app.get('/api/my-games', (req, res) => {
             mode: s.players.length > 1 && s.players.filter(other => other.id !== p.id).every(other => other.bot && !other.temporaryBot) ? 'solo' : 'friends'});
     }
     games.sort((a, b) => b.lastPlayedAt - a.lastPlayedAt || a.code.localeCompare(b.code));
-    res.json({games});
+    res.json({games, progression: accountAuth.soloProgress(req.account.id)});
+});
+
+app.get('/api/progression', async (req, res) => {
+    try {await saveRooms();res.json({progression: accountAuth.soloProgress(req.account.id)});}
+    catch (error) {res.status(error.status || 503).json({error: error.message, code: error.code || 'STORAGE_UNAVAILABLE'});}
 });
 
 app.post('/api/resume', async (req, res) => {
@@ -1249,7 +1268,8 @@ app.post('/api/create', async (req, res) => {
             throw new Error('Limite de salons atteinte (50). Réutilisez un salon existant.');
         }
         
-        const botLevel = botAI.normalize(req.body.botLevel ?? 'normal');
+        const botLevel = botAI.normalize(req.body.botLevel ?? (req.body.mode === 'solo' ? 'beginner' : 'normal'));
+        if (req.body.mode === 'solo') soloProgression.requireUnlocked(accountAuth.soloProgress(req.account.id), botLevel);
         const p = newPlayer(req.body.name || req.account.name.slice(0, 20));
         p.accountId = req.account.id;
         p.picture = req.account.picture;
@@ -1285,6 +1305,7 @@ app.post('/api/create', async (req, res) => {
         if (req.body.mode === 'solo') {
             const count = botAI.soloOpponents(botLevel);
             for (let i = 0; i < count; i++) invokeGameAction(s, p, {type: 'addbot'});
+            s.soloChallenge = {version: 1, accountId: p.accountId, level: botLevel, opponentIds: s.players.filter(player => player.id !== p.id).map(player => player.id)};
             invokeGameAction(s, p, {type: 'start'});
         }
         
@@ -1331,10 +1352,11 @@ app.get('/api/state', async (req, res) => {
         updatePresence(s);
 
         invokeBotStep(s);
+        if (s.phase === 'finished') await saveRooms();
         
         const publicState = {};
         for (const k in s) {
-            if (!['botNext', 'botPhase', 'decks', 'lastSeen', 'checkingDisconnect'].includes(k)) {
+            if (!['botNext', 'botPhase', 'decks', 'lastSeen', 'checkingDisconnect', 'soloChallenge', 'soloUnlock'].includes(k)) {
                 publicState[k] = s[k];
             }
         }
@@ -1357,6 +1379,9 @@ app.get('/api/state', async (req, res) => {
         });
         
         publicState.me = p.id;
+        publicState.soloLevel = s.soloChallenge?.level || null;
+        publicState.soloProgress = accountAuth.soloProgress(req.account.id);
+        if (s.soloChallenge?.accountId === req.account.id && s.soloUnlock) publicState.soloUnlock = s.soloUnlock;
         res.json(publicState);
     } catch (error) {
         res.status(error.status || 400).json({error: error.message, ...(error.code ? {code: error.code} : {})});
@@ -1366,8 +1391,12 @@ app.get('/api/state', async (req, res) => {
 app.post('/api/action', async (req, res) => {
     try {
         const s = getRoom(req.body.code);
-        const p = getPlayer(s, req.body.token, req.account.id);
+        let p = getPlayer(s, req.body.token, req.account.id);
         if (p.accountId !== req.account.id) return res.status(403).json({code: 'ACCOUNT_MISMATCH', error: 'Cette place appartient à un autre compte Google.'});
+        if (req.body.type === 'rematch' && s.phase === 'finished') {
+            await saveRooms();
+            p = getPlayer(s, req.body.token, req.account.id);
+        }
         
         if (req.body.type === 'leave') {
             delete p.autoPlay;
@@ -1412,7 +1441,7 @@ if (process.env.DATABASE_URL) {
         database = value;
         rooms = new Map(Object.entries(database.rooms));
         for (const s of rooms.values()) if (['opening', 'playing'].includes(s.phase)) prepareCardDecks(s);
-        createAuth({persistence: database}).install(authRouter);
+        accountAuth = createAuth({persistence: database});accountAuth.install(authRouter);
         storageReady = true;
         listen();
     }).catch(async () => {

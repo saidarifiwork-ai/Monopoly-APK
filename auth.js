@@ -1,6 +1,8 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const {OAuth2Client} = require('google-auth-library');
+const solo = require('./solo-progression');
+const {LEVELS} = require('./bot-ai');
 
 const COOKIE = 'quartiers_account';
 const DAY = 24 * 60 * 60 * 1000;
@@ -52,6 +54,26 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
     }
     let accounts = persistence ? persistence.auth.accounts : {};
     if (!persistence && fs.existsSync(accountsFile)) accounts = JSON.parse(fs.readFileSync(accountsFile, 'utf8'));
+    function soloProgress(accountId) {return solo.progress(accounts[accountId]);}
+    function publicAccount(account) {
+        const current = accounts[account.id] || account;
+        return {id: current.id, name: current.name, picture: current.picture, createdAt: current.createdAt, soloProgress: soloProgress(current.id)};
+    }
+    async function recordSoloWins(wins) {
+        const pending = wins.filter(win => {
+            const state = soloProgress(win.accountId);
+            return state.highestUnlocked === win.level && !state.completedLevels.includes(win.level);
+        });
+        if (pending.length) await updateAuth(draft => {
+            for (const win of pending) {
+                const account = draft.accounts[win.accountId];
+                const state = solo.progress(account);
+                if (!account || state.highestUnlocked !== win.level || state.completedLevels.includes(win.level)) continue;
+                draft.accounts[win.accountId] = {...account, soloVictories: {...account.soloVictories, [win.level]: {wonAt: now(), gameId: win.gameId}}};
+            }
+        });
+        return wins.filter(win => soloProgress(win.accountId).completedLevels.includes(win.level)).map(win => ({...win, nextLevel: LEVELS[LEVELS.findIndex(level => level.id === win.level) + 1]?.id || null}));
+    }
     const configured = /^[\w-]+\.apps\.googleusercontent\.com$/.test(clientId);
     async function cleanup() {
         if ([...sessions.values()].some(value => value.expires <= now())) {
@@ -101,7 +123,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
             }
         }
         if (!session || session.expires <= now()) return res.status(401).json({code: 'AUTH_REQUIRED', error: 'Connectez-vous avec Google pour jouer.'});
-        req.account = session.account;
+        req.account = publicAccount(session.account);
         next();
     }
     function storageFailure(res) {return res.status(503).json({code: 'STORAGE_UNAVAILABLE', error: 'La sauvegarde est temporairement indisponible. Votre connexion reste enregistrée.'});}
@@ -140,7 +162,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
                 let saved;
                 try {
                     saved = await updateAuth(draft => {
-                        const account = {id, name: String(claims.name || claims.given_name || 'Joueur').trim().slice(0, 80), picture,
+                        const account = {...draft.accounts[id], id, name: String(claims.name || claims.given_name || 'Joueur').trim().slice(0, 80), picture,
                             createdAt: draft.accounts[id]?.createdAt || now()};
                         draft.accounts[id] = account;
                         const previous = [...draft.sessions].filter(([, value]) => value.account.id === id);
@@ -153,7 +175,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
                 } catch (_) {return storageFailure(res);}
                 const {account, bearer} = saved;
                 res.setHeader('Set-Cookie', cookie(req, bearer, TTL / 1000));
-                res.json({account, ...(platform === 'android' ? {token: bearer} : {})});
+                res.json({account: publicAccount(account), ...(platform === 'android' ? {token: bearer} : {})});
             } catch (_) {
                 res.status(401).json({error: 'Connexion Google impossible. Réessayez avec votre compte Google.'});
             }
@@ -165,8 +187,8 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
             try {await updateAuth(draft => draft.sessions.delete(digest(token(req))));} catch (_) {return storageFailure(res);}
             res.setHeader('Set-Cookie', cookie(req, '', 0));res.json({ok: true});
         });
-        for (const route of ['/api/create', '/api/join', '/api/state', '/api/action', '/api/my-games', '/api/resume']) app.use(route, requireAccount);
+        for (const route of ['/api/create', '/api/join', '/api/state', '/api/action', '/api/my-games', '/api/resume', '/api/progression']) app.use(route, requireAccount);
     }
-    return {install};
+    return {install, soloProgress, recordSoloWins};
 }
 module.exports = {createAuth};

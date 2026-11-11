@@ -159,6 +159,11 @@ class _OriginalGameScreenState extends State<OriginalGameScreen>
 
   Future<void> forward(Json request) async {
     final result = await transport.handle(request);
+    if (result['status'] == 200 &&
+        Uri.parse(request['url'] as String).path == '/api/state') {
+      widget.game.updateSoloProgress((jsonDecode(result['body'] as String)
+          as Json)['soloProgress'] as Json?);
+    }
     if (result['status'] == 409) await widget.game.handleSeatMoved();
     if (result['status'] == 401) widget.game.onAuthenticationRequired?.call();
     if (!mounted) return;

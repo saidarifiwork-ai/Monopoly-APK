@@ -222,18 +222,41 @@ class GameController extends ChangeNotifier {
   String? authToken;
   VoidCallback? onAuthenticationRequired;
   void setAuthToken(String? value) {
-    if (authToken != value) {
+    final changed = authToken != value;
+    if (changed) {
       resumableGames = [];
       gamesError = null;
+      soloProgress = {
+        'completedLevels': <String>[],
+        'unlockedLevels': ['beginner'],
+        'highestUnlocked': 'beginner',
+        'allCompleted': false
+      };
     }
     authToken = value;
     _api?.authToken = value;
+    if (changed) _notify();
   }
 
   Json? _session;
   GameState? state;
   String? error;
   List<Json> resumableGames = [];
+  Json soloProgress = {
+    'completedLevels': <String>[],
+    'unlockedLevels': ['beginner'],
+    'highestUnlocked': 'beginner',
+    'allCompleted': false
+  };
+  bool soloUnlocked(String level) =>
+      (soloProgress['unlockedLevels'] as List).contains(level);
+  void updateSoloProgress(Json? progress) {
+    if (progress == null || progress['unlockedLevels'] is! List) return;
+    if (jsonEncode(soloProgress) == jsonEncode(progress)) return;
+    soloProgress = Map<String, dynamic>.from(progress);
+    _notify();
+  }
+
   bool _handlingSeatMove = false;
   bool discoveringGames = false;
   String? gamesError;
@@ -304,6 +327,7 @@ class GameController extends ChangeNotifier {
         return;
       }
       resumableGames = ((result['games'] ?? []) as List).cast<Json>();
+      updateSoloProgress(result['progression'] as Json?);
       gamesError = null;
     } catch (_) {
       if (generation == _generation && authToken == accountToken) {
@@ -389,7 +413,7 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> enter(String name,
-      {String? room, bool solo = false, String botLevel = 'normal'}) async {
+      {String? room, bool solo = false, String botLevel = 'beginner'}) async {
     if (busy || _api == null) return;
     busy = true;
     error = null;
@@ -487,6 +511,7 @@ class GameController extends ChangeNotifier {
       );
       if (_disposed || generation != _generation) return;
       final next = GameState(json);
+      updateSoloProgress(json['soloProgress'] as Json?);
       if (state != null) {
         cards.addAll(
           next.events.where((e) => e['id'] > _lastEvent && e['type'] == 'card'),

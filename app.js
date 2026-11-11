@@ -1,6 +1,7 @@
 const BOT_LEVELS=[['beginner','Débutant'],['easy','Facile'],['normal','Normal'],['hard','Difficile'],['expert','Expert'],['ultimate','Ultime']];
 const SOLO_OPPONENTS={beginner:1,easy:1,normal:1,hard:2,expert:3,ultimate:4};
 const BOT_DESCRIPTIONS={beginner:'Achats simples et premières constructions.',easy:'Achats réguliers et budget prudent.',normal:'Groupes de villes et constructions rentables.',hard:'Anticipation des loyers et protection des groupes.',expert:'Investissements comparés et négociations stratégiques.',ultimate:'Anticipation approfondie des risques et du développement adverse.'};
+let soloProgress={completedLevels:[],unlockedLevels:['beginner'],highestUnlocked:'beginner',allCompleted:false};
 let pendingBotLevel='normal';
 const $=s=>document.querySelector(s),colors=['#d9483b','#4383bc','#bd8b32','#986ab6','#408558','#bc617b'];
 let session=null;try{session=JSON.parse((sessionStorage.getItem('quartiers')||localStorage.getItem('quartiers'))||'null')}catch{sessionStorage.removeItem('quartiers')}
@@ -108,7 +109,7 @@ function renderActions(){
  $('#action-title').textContent=s.phase==='lobby'?'Rassemblez vos amis.':s.phase==='finished'?'La victoire est à vous ?':current.bot?'Le robot joue.':current.id===s.me?'C’est votre tour !':current.name+' joue.';
  $('#status').textContent=s.phase==='lobby'?'Ajoutez un robot ou partagez le salon. Lancez quand tout le monde est prêt.':s.phase==='finished'?current.name+' remporte la partie. '+(me.id===s.host?'Relancez une partie avec les mêmes joueurs.':'L’hôte peut relancer une partie.'):animating?'Suivez le lancer et le déplacement sur le plateau…':current.id===s.me?(s.rolled?'Achetez la ville si elle est libre, puis terminez votre tour.':'Lancez les dés : votre pion avancera case par case.'):current.bot?'Regardez ses dés, son pion et ses décisions. Il joue automatiquement.':'Vous pouvez examiner les villes pendant son tour.';
  if(s.phase==='finished'&&me.id===s.host)addButton('#actions','🔄 Rejouer','rematch');
- if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6){const label=document.createElement('label');label.textContent='Niveau du prochain robot';const select=document.createElement('select');select.id='lobby-bot-level';select.setAttribute('aria-label','Niveau du prochain robot');for(const [id,name] of BOT_LEVELS)select.add(new Option(name,id));select.value=pendingBotLevel;select.disabled=busy||animating;select.onchange=()=>{pendingBotLevel=select.value};label.append(select);$('#actions').append(label);const add=document.createElement('button');add.className='secondary';add.textContent='Ajouter un robot 🤖';add.disabled=busy||animating;add.onclick=()=>action('addbot',null,{botLevel:pendingBotLevel});$('#actions').append(add)}if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
+ if(s.phase==='lobby'&&me.id===s.host){if(s.players.length<6&&!s.soloLevel){const label=document.createElement('label');label.textContent='Niveau du prochain robot';const select=document.createElement('select');select.id='lobby-bot-level';select.setAttribute('aria-label','Niveau du prochain robot');for(const [id,name] of BOT_LEVELS)select.add(new Option(name,id));select.value=pendingBotLevel;select.disabled=busy||animating;select.onchange=()=>{pendingBotLevel=select.value};label.append(select);$('#actions').append(label);const add=document.createElement('button');add.className='secondary';add.textContent='Ajouter un robot 🤖';add.disabled=busy||animating;add.onclick=()=>action('addbot',null,{botLevel:pendingBotLevel});$('#actions').append(add)}if(s.players.length>=2)addButton('#actions','Commencer la partie →','start')}
  if(s.phase==='opening'){
   $('#action-title').textContent='Qui commence ?';
   $('#status').textContent=(s.openingRound>1?'Égalité : les joueurs concernés relancent. ':'Chaque joueur lance deux dés. Le plus grand total commence. ')+(current.id===me.id?'À vous de lancer !':current.name+' doit lancer'+(current.bot?' automatiquement.':'.'));
@@ -162,7 +163,7 @@ function renderSelection(){
  }
 }
 function render(){
- if(!state)return;const s=state,current=s.players[s.turn];showVictory(s);$('#welcome').hidden=true;$('#game').hidden=false;$('#room-code').textContent=session.code;$('#player-count').textContent=s.players.length+' / 6';
+ if(!state)return;const s=state,current=s.players[s.turn];if(s.soloProgress)updateSoloProgress(s.soloProgress);showVictory(s);$('#welcome').hidden=true;$('#game').hidden=false;$('#room-code').textContent=session.code;$('#player-count').textContent=s.players.length+' / 6';
  $('#players').innerHTML=s.players.map((p,i)=>{
    let statusText = p.out ? 'Faillite' : p.jail ? 'En prison' : p.pos === 10 ? 'Simple visite' : pawnNames[i] + (p.bot ? ' · robot' : '');
 
@@ -183,7 +184,17 @@ function render(){
  if(!animating)announce(s.phase==='lobby'?'Le salon est prêt. Invitez vos amis ou ajoutez un robot.':s.phase==='finished'?'🏆 '+current.name+' remporte la partie !':current.id===s.me?(s.rolled?'À vous : achetez, construisez ou terminez votre tour.':'À vous de lancer les dés !'):current.bot?'🤖 '+current.name+' prépare son prochain coup…':current.name+' joue.',current.id);
 }
 function updateSoloLevel(){const level=$('#bot-level').value,n=SOLO_OPPONENTS[level],name=BOT_LEVELS.find(l=>l[0]===level)[1];$('#solo').textContent=n>1?'Affronter '+n+' robots '+name+' →':'Jouer contre le robot →';$('.bot-help').textContent=name+' · '+n+' robot'+(n>1?'s':'')+' · '+BOT_DESCRIPTIONS[level]+(n>1?' Chacun joue pour lui.':'');}
-$('#bot-level').onchange=updateSoloLevel;updateSoloLevel();
+function updateSoloProgress(progress){
+ if(progress?.unlockedLevels)soloProgress=progress;
+ const select=$('#bot-level');
+ for(const option of select.options){const entry=BOT_LEVELS.find(level=>level[0]===option.value);option.disabled=!soloProgress.unlockedLevels.includes(option.value);option.textContent=entry[1]+(option.disabled?' 🔒':'');}
+ if(!soloProgress.unlockedLevels.includes(select.value))select.value=soloProgress.highestUnlocked||'beginner';
+ const index=BOT_LEVELS.findIndex(level=>level[0]===soloProgress.highestUnlocked);
+ const message=soloProgress.allCompleted?'🏆 Tous les niveaux sont validés !':index===BOT_LEVELS.length-1?'Dernier défi : gagnez en Ultime.':'Gagnez '+BOT_LEVELS[Math.max(0,index)][1]+' pour débloquer '+BOT_LEVELS[Math.max(0,index)+1][1]+'.';
+ if($('#solo-progress'))$('#solo-progress').textContent=message;
+ updateSoloLevel();
+}
+$('#bot-level').onchange=updateSoloLevel;updateSoloProgress(soloProgress);
 $('#solo').onclick=()=>enter(true,'solo');$('#create').onclick=()=>enter(true);$('#entry').onsubmit=e=>{e.preventDefault();enter(false)};$('#code').value=new URLSearchParams(location.search).get('room')||'';
 const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;$('#entry').prepend(resumeButton);
 resumeButton.onclick=()=>{suspended=false;localStorage.removeItem('quartiers-paused');poll(true)};
@@ -314,6 +325,8 @@ function showVictory(s){
  let rematch=dialog.querySelector('.rematch-button');if(!rematch){rematch=document.createElement('button');rematch.type='button';rematch.className='rematch-button';rematch.textContent='🔄 Rejouer';dialog.querySelector('button').before(rematch)}
  rematch.hidden=s.me!==s.host;rematch.disabled=busy||animating;rematch.onclick=()=>action('rematch');
  dialog.querySelector('h2').textContent=winner.name+' remporte la partie !';
+ let unlock=dialog.querySelector('.solo-unlock');if(!unlock){unlock=document.createElement('p');unlock.className='solo-unlock';dialog.querySelector('h2').after(unlock);}
+ unlock.hidden=!(s.soloUnlock&&winner.id===s.me);unlock.textContent=s.soloUnlock?.nextLevel?'🔓 Niveau '+BOT_LEVELS.find(level=>level[0]===s.soloUnlock.nextLevel)[1]+' disponible !':s.soloUnlock?'🏆 Tous les niveaux sont validés !':'';
  let summary=dialog.querySelector('.victory-summary');if(!summary){summary=document.createElement('div');summary.className='victory-summary';dialog.querySelector('button').before(summary)}
  const title=document.createElement('h3');title.textContent='Classement final';summary.replaceChildren(title);
  for(const player of [...s.players].sort((a,b)=>a.id===winner.id?-1:b.id===winner.id?1:b.money-a.money)){const row=document.createElement('p');const owned=s.tiles.filter(t=>t.owner===player.id);row.textContent=player.name+' · '+money(player.money)+' DH · '+owned.length+' bien'+(owned.length===1?'':'s')+(owned.length?' : '+owned.map(t=>t.name).join(', '):'');summary.append(row)}
@@ -347,7 +360,7 @@ async function refreshAccountGames() {
  if(gamesRequest)return gamesRequest;
  gamesRequest=api('/api/my-games').then(result=>{
   if(window.QuartiersAuth?.account?.id!==owner)return;
-  accountGames=result.games||[];gamesError=null;renderAccountGames();
+  accountGames=result.games||[];if(result.progression)updateSoloProgress(result.progression);gamesError=null;renderAccountGames();
  }).catch(()=>{if(window.QuartiersAuth?.account?.id===owner){gamesError='Impossible de vérifier vos parties. Réessayez dans un instant.';renderAccountGames();}}).finally(()=>{
   gamesRequest=null;
   if(window.QuartiersAuth?.allowed&&window.QuartiersAuth.account.id!==owner)refreshAccountGames();
@@ -376,7 +389,7 @@ function seatMoved() {
 
 // An account switch must never restore another person's locally saved seat.
 window.addEventListener('quartiers-account', event => {
- if(event.detail){if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;refreshAccountGames();}
+ if(event.detail){updateSoloProgress(event.detail.soloProgress||{completedLevels:[],unlockedLevels:['beginner'],highestUnlocked:'beginner',allCompleted:false});if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;refreshAccountGames();}
  else{resetView();resumeButton.hidden=true;$('#game').hidden=true;$('#welcome').hidden=false;}
 });
 window.addEventListener('quartiers-auth-expired',()=>{resetView();$('#game').hidden=true;$('#welcome').hidden=false});

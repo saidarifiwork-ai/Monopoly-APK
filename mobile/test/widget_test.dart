@@ -65,15 +65,72 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
-  testWidgets('six bot difficulties can be selected on the native welcome',
+  testWidgets(
+      'solo levels stay locked until a verified account progression update arrives',
       (tester) async {
     SharedPreferences.setMockInitialValues({'server': ''});
     final controller = GameController(await SharedPreferences.getInstance());
     await tester.pumpWidget(QuartiersApp(
         controller: controller, accountController: SignedInTestAccount()));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Normal'));
-    await tester.tap(find.text('Normal'));
+    DropdownButton<String> selector() => tester.widget<DropdownButton<String>>(
+        find.byWidgetPredicate((w) => w is DropdownButton<String>));
+    expect(
+        selector()
+            .items!
+            .where((item) => item.enabled)
+            .map((item) => item.value)
+            .toList(),
+        ['beginner']);
+    expect(find.text('Gagnez Débutant pour débloquer Facile.'), findsOneWidget);
+    controller.updateSoloProgress({
+      'completedLevels': ['beginner'],
+      'unlockedLevels': ['beginner', 'easy'],
+      'highestUnlocked': 'easy',
+      'allCompleted': false
+    });
+    await tester.pumpAndSettle();
+    expect(
+        selector()
+            .items!
+            .where((item) => item.enabled)
+            .map((item) => item.value)
+            .toList(),
+        ['beginner', 'easy']);
+    await tester.ensureVisible(find.text('Débutant'));
+    await tester.tap(find.text('Débutant'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Facile').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Gagnez Facile pour débloquer Normal.'), findsOneWidget);
+    controller.setAuthToken('another-account');
+    controller.updateSoloProgress({
+      'completedLevels': [],
+      'unlockedLevels': ['beginner'],
+      'highestUnlocked': 'beginner',
+      'allCompleted': false
+    });
+    await tester.pumpAndSettle();
+    expect(
+        selector()
+            .items!
+            .where((item) => item.enabled)
+            .map((item) => item.value)
+            .toList(),
+        ['beginner']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('six bot difficulties can be selected on the native welcome',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'server': ''});
+    final controller = GameController(await SharedPreferences.getInstance());
+    await tester.pumpWidget(QuartiersApp(
+        controller: controller,
+        accountController: SignedInTestAccount(unlockAll: true)));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Débutant'));
+    await tester.tap(find.text('Débutant'));
     await tester.pumpAndSettle();
     for (final level in [
       'Débutant',
@@ -102,10 +159,11 @@ void main() {
       SharedPreferences.setMockInitialValues({'server': ''});
       final controller = GameController(await SharedPreferences.getInstance());
       await tester.pumpWidget(QuartiersApp(
-          controller: controller, accountController: SignedInTestAccount()));
+          controller: controller,
+          accountController: SignedInTestAccount(unlockAll: true)));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Normal'));
-      await tester.tap(find.text('Normal'));
+      await tester.ensureVisible(find.text('Débutant'));
+      await tester.tap(find.text('Débutant'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(entry.key).last);
       await tester.pumpAndSettle();

@@ -12,11 +12,31 @@ class MemoryAccountTokenStore implements AccountTokenStore {
 }
 
 class SignedInTestAccount extends GoogleAccountController {
-  SignedInTestAccount() : super(store: MemoryAccountTokenStore());
+  SignedInTestAccount({this.unlockAll = false})
+      : super(store: MemoryAccountTokenStore());
+  final bool unlockAll;
   @override
   Future<void> restore(String address) async {
     server = address;
-    account = {'id': 'test-account', 'name': 'Joueur test', 'picture': ''};
+    account = {
+      'id': 'test-account',
+      'name': 'Joueur test',
+      'picture': '',
+      if (unlockAll)
+        'soloProgress': {
+          'completedLevels': ['beginner', 'easy', 'normal', 'hard', 'expert'],
+          'unlockedLevels': [
+            'beginner',
+            'easy',
+            'normal',
+            'hard',
+            'expert',
+            'ultimate'
+          ],
+          'highestUnlocked': 'ultimate',
+          'allCompleted': false
+        }
+    };
     token = 'test-account-bearer';
     notifyListeners();
   }

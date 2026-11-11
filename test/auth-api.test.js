@@ -79,7 +79,7 @@ test('the same Google account discovers and transfers a friends game web → And
 
 test('solo games, waiting lobbies and temporary robot takeovers can be resumed; other Google accounts cannot claim them',async t=>{
  const {call,login,state,engine}=await gameServer(t),web=await login('said','web'),android=await login('said'),other=await login('abdo');
- const solo=(await call('/api/create',{name:'Said',mode:'solo',botLevel:'ultimate'},android)).body;
+ const solo=(await call('/api/create',{name:'Said',mode:'solo',botLevel:'beginner'},android)).body;
  const lobby=(await call('/api/create',{name:'Said'},web)).body;
  const games=(await call('/api/my-games',null,web)).body.games;
  assert(games.some(g=>g.code===solo.code&&g.mode==='solo'));assert(games.some(g=>g.code===lobby.code&&g.phase==='lobby'));
@@ -88,7 +88,7 @@ test('solo games, waiting lobbies and temporary robot takeovers can be resumed; 
  const s=engine.getRoom(solo.code),p=s.players[0];p.bot=true;p.temporaryBot=true;p.autoPlay=true;
  const resumed=(await call('/api/resume',{code:solo.code},web)).body;
  assert.equal(p.bot,false);assert.equal(p.temporaryBot,undefined);assert.equal(p.autoPlay,undefined);
- assert.equal(s.players.filter(x=>x.bot).length,4);assert.equal((await state(resumed,web)).status,200);
+ assert.equal(s.players.filter(x=>x.bot).length,1);assert.equal((await state(resumed,web)).status,200);
  s.phase='finished';assert(!(await call('/api/my-games',null,web)).body.games.some(g=>g.code===solo.code));
  assert.equal((await call('/api/resume',{code:solo.code},android)).status,400);
  for(const route of ['/api/my-games','/api/resume'])assert.equal((await call(route,route.endsWith('resume')?{code:lobby.code}:null)).status,401);
@@ -105,10 +105,53 @@ test('solo creates the requested independent opponents at every difficulty and r
   assert(s.players.filter(p=>p.bot).every(p=>p.botLevel===botLevel&&p.money===1500));
   assert.equal(new Set(s.players.map(p=>p.id)).size,count+1);
   assert.equal(s.phase,'opening');
-  const room=engine.getRoom(seat.code);room.phase='finished';engine.invokeGameAction(room,room.players[0],{type:'rematch'});
+  const room=engine.getRoom(seat.code);room.phase='playing';room.turn=0;
+  for(const bot of room.players.filter(p=>p.bot)){room.debts=[{player:bot.id,receiver:room.players[0].id,amount:100000}];engine.invokeGameAction(room,bot,{type:'bankrupt'});}
+  assert.equal((await state(seat,account)).body.soloProgress.completedLevels.at(-1),botLevel);
+  engine.invokeGameAction(room,room.players[0],{type:'rematch'});
   const replay=(await state(seat,account)).body;
   assert.equal(replay.players.length,count+1);assert(replay.players.filter(p=>p.bot).every(p=>p.botLevel===botLevel));
  }
  const privateRoom=(await call('/api/create',{botLevel:'ultimate'},account)).body;
  assert.equal((await state(privateRoom,account)).body.players.length,1,'private lobbies stay manual');
+});
+
+
+test('only server-verified solo victories unlock the next level across devices and accounts',async t=>{
+ const {call,login,state,engine}=await gameServer(t),web=await login('said','web'),phone=await login('said'),other=await login('abdo');
+ const progress=async auth=>(await call('/api/progression',null,auth)).body.progression;
+ assert.deepEqual((await progress(web)).unlockedLevels,['beginner']);
+ for(const level of ['easy','normal','hard','expert','ultimate']){
+  const denied=await call('/api/create',{mode:'solo',botLevel:level,soloVictories:{beginner:{wonAt:Date.now(),gameId:'fake'}}},phone);
+  assert.equal(denied.status,403);assert.equal(denied.body.code,'LEVEL_LOCKED');
+ }
+ const seat=(await call('/api/create',{mode:'solo',botLevel:'beginner'},web)).body;
+ assert(!('soloChallenge' in (await state(seat,web)).body));
+ assert.equal((await call('/api/action',{...seat,type:'win',phase:'finished',winner:web.account.id},web)).status,400);
+ assert.deepEqual((await progress(phone)).completedLevels,[]);
+ const room=engine.getRoom(seat.code);room.phase='playing';room.turn=0;
+ room.debts=[{player:room.players[1].id,receiver:room.players[0].id,amount:100000}];
+ engine.invokeGameAction(room,room.players[1],{type:'bankrupt'});
+ const won=(await state(seat,web)).body;
+ assert.equal(won.phase,'finished');assert.equal(won.soloUnlock.nextLevel,'easy');
+ assert.deepEqual((await progress(phone)).unlockedLevels,['beginner','easy']);
+ assert.deepEqual((await progress(other)).unlockedLevels,['beginner']);
+ for(let i=0;i<4;i++)await state(seat,phone);
+ assert.deepEqual((await progress(web)).completedLevels,['beginner'],'polling never awards a second level');
+ const loggedAgain=await login('said');assert.deepEqual(loggedAgain.account.soloProgress.completedLevels,['beginner']);
+ const easy=(await call('/api/create',{mode:'solo',botLevel:'easy'},phone)).body;assert(easy.token);
+ assert.equal((await call('/api/create',{mode:'solo',botLevel:'normal'},phone)).status,403);
+ const easyRoom=engine.getRoom(easy.code);easyRoom.phase='playing';easyRoom.turn=0;easyRoom.debts=[{player:easyRoom.players[1].id,receiver:easyRoom.players[0].id,amount:100000}];engine.invokeGameAction(easyRoom,easyRoom.players[1],{type:'bankrupt'});
+ assert.equal((await call('/api/action',{...easy,type:'rematch'},phone)).status,200);
+ assert.deepEqual((await progress(web)).completedLevels,['beginner','easy'],'replaying immediately must save the victory before resetting the room');
+ const loss=(await call('/api/create',{mode:'solo',botLevel:'beginner'},other)).body;
+ const losingRoom=engine.getRoom(loss.code);losingRoom.phase='playing';losingRoom.turn=0;losingRoom.debts=[{player:losingRoom.players[0].id,receiver:losingRoom.players[1].id,amount:100000}];
+ assert.equal((await call('/api/action',{...loss,type:'bankrupt'},other)).status,200);
+ assert.deepEqual((await progress(other)).completedLevels,[]);
+ // A custom friends lobby can be used for practice, but cannot award solo levels.
+ const custom=(await call('/api/create',{botLevel:'beginner'},other)).body;
+ await call('/api/action',{...custom,type:'addbot'},other);
+ const practice=engine.getRoom(custom.code);practice.phase='playing';practice.turn=0;practice.debts=[{player:practice.players[1].id,receiver:practice.players[0].id,amount:100000}];engine.invokeGameAction(practice,practice.players[1],{type:'bankrupt'});await state(custom,other);
+ assert.deepEqual((await progress(other)).completedLevels,[]);
+ assert.equal((await call('/api/progression')).status,401);
 });

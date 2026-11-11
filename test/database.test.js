@@ -204,3 +204,25 @@ test('PostgreSQL renews remembered devices without Google and retains renewal af
  assert.equal((await fetch(base+'/api/auth/me',{headers:headers[0]})).status,401);
  assert.equal((await fetch(base+'/api/auth/me',{headers:headers[1]})).status,200);
 });
+
+test('earned solo levels persist in PostgreSQL across device changes, sign-in and file loss', {skip:!address,timeout:30000},async t=>{
+ const db=await isolatedDatabase(t),h=await serverHarness(t,db.url);
+ await h.start(false);
+ const web=await h.login('said','web'),phone=await h.login('said'),other=await h.login('abdo');
+ const seat=(await h.call('/api/create',{mode:'solo',botLevel:'beginner'},web)).body;
+ assert.equal((await h.call('/api/create',{mode:'solo',botLevel:'easy'},phone)).status,403);
+ await h.stop();
+ // Fixture a verified completed room on the private server disk, never through an API bypass.
+ const rooms=JSON.parse(fs.readFileSync(h.files.ROOMS_FILE,'utf8')),room=rooms[seat.code];
+ room.phase='finished';room.turn=0;room.players[1].out=true;room.players[1].money=0;
+ fs.writeFileSync(h.files.ROOMS_FILE,JSON.stringify(rooms));
+ await h.start();
+ const win=await h.state(seat,web);assert.equal(win.status,200);assert.equal(win.body.soloUnlock.nextLevel,'easy');
+ assert.deepEqual((await h.call('/api/progression',null,phone)).body.progression.unlockedLevels,['beginner','easy']);
+ assert.deepEqual((await h.call('/api/progression',null,other)).body.progression.unlockedLevels,['beginner']);
+ await h.stop('SIGKILL');for(const file of Object.values(h.files))fs.rmSync(file,{force:true});await h.start();
+ assert.deepEqual((await h.call('/api/auth/me',null,phone)).body.account.soloProgress.completedLevels,['beginner']);
+ const fresh=await h.login('said');assert.deepEqual(fresh.account.soloProgress.completedLevels,['beginner']);
+ assert.equal((await h.call('/api/create',{mode:'solo',botLevel:'easy'},fresh)).status,200);
+ assert.equal((await h.call('/api/create',{mode:'solo',botLevel:'normal'},fresh)).status,403);
+});

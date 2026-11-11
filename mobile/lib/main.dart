@@ -175,7 +175,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   bool leaving = false;
   bool gameOpened = false;
   bool settingsOpen = false;
-  String botLevel = 'normal';
+  String botLevel = 'beginner';
   static const soloOpponents = {
     'beginner': 1,
     'easy': 1,
@@ -246,6 +246,8 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   void onAccountChange() {
     if (!mounted) return;
     c.setAuthToken(a.token);
+    c.updateSoloProgress(a.account?['soloProgress'] as Json?);
+    if (!c.soloUnlocked(botLevel)) botLevel = 'beginner';
     if (a.account != null && lastAccount != a.account!['id']) {
       lastAccount = a.account!['id'] as String;
       final value = a.account!['name'] as String;
@@ -292,6 +294,7 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   void onChange() {
     if (!mounted) return;
     if (c.state == null) gameOpened = false;
+    if (!c.soloUnlocked(botLevel)) botLevel = 'beginner';
     // The original renderer owns polling and animations while a game is open.
     c.pause(c.state != null);
     setState(() {});
@@ -501,6 +504,17 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     );
   }
 
+  String soloProgressMessage() {
+    if (c.soloProgress['allCompleted'] == true) {
+      return '🏆 Tous les niveaux sont validés !';
+    }
+    final level = c.soloProgress['highestUnlocked'] as String? ?? 'beginner';
+    final levels = botNames.keys.toList(),
+        index = botNames.keys.toList().indexOf(level);
+    if (index == levels.length - 1) return 'Dernier défi : gagnez en Ultime.';
+    return 'Gagnez ${botNames[level]} pour débloquer ${botNames[levels[index + 1]]}.';
+  }
+
   Widget welcome() => LayoutBuilder(builder: (context, constraints) {
         final portrait = constraints.maxWidth < 550 &&
             constraints.maxHeight > constraints.maxWidth;
@@ -686,28 +700,31 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
+                              isExpanded: true,
                               initialValue: botLevel,
                               decoration: const InputDecoration(
-                                  labelText: 'Niveau du robot'),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'beginner', child: Text('Débutant')),
-                                DropdownMenuItem(
-                                    value: 'easy', child: Text('Facile')),
-                                DropdownMenuItem(
-                                    value: 'normal', child: Text('Normal')),
-                                DropdownMenuItem(
-                                    value: 'hard', child: Text('Difficile')),
-                                DropdownMenuItem(
-                                    value: 'expert', child: Text('Expert')),
-                                DropdownMenuItem(
-                                    value: 'ultimate', child: Text('Ultime')),
+                                  labelText: 'Niveau du solo'),
+                              items: [
+                                for (final entry in botNames.entries)
+                                  DropdownMenuItem(
+                                      value: entry.key,
+                                      enabled: c.soloUnlocked(entry.key),
+                                      child: Text(entry.value +
+                                          (c.soloUnlocked(entry.key)
+                                              ? ''
+                                              : ' 🔒'))),
                               ],
                               onChanged: c.busy
                                   ? null
                                   : (value) => setState(
-                                      () => botLevel = value ?? 'normal'),
+                                      () => botLevel = value ?? 'beginner'),
                             ),
+                            Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(soloProgressMessage(),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: ink))),
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(

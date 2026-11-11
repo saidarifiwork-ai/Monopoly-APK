@@ -139,3 +139,48 @@ Les tests couvrent les six effectifs via la vraie API, la conservation au rejeu,
 les enchères entre quatre robots indépendants, les différences de décision selon
 le niveau et une simulation légale à cinq joueurs. Le web et le choix des niveaux
 sur téléphone sont vérifiés dans Chromium et les tests Flutter.
+
+## Déblocage progressif des solos
+
+Un compte Google commence avec Débutant. Une victoire valide débloque exactement
+le niveau suivant : Débutant → Facile → Normal → Difficile → Expert → Ultime.
+Les niveaux déjà débloqués restent jouables. Après une victoire en Ultime, tous
+les niveaux sont marqués validés. Le nombre de robots reste celui du tableau.
+
+Le serveur contrôle `botLevel` lors de la création d’un solo, même si le client
+modifie le menu ou envoie directement une requête. Un niveau verrouillé renvoie
+`403 LEVEL_LOCKED`. Une victoire doit être constatée par le moteur, avec un seul
+survivant propriétaire du compte et tous les adversaires initiaux éliminés, au
+bon niveau et au bon effectif. Une simple déclaration de victoire du client ne
+vaut pas validation. Une défaite ne débloque rien.
+
+Les défis sont identifiés à leur création par des métadonnées serveur privées.
+Leur effectif ne peut pas être modifié au rejeu. Les salons entre amis restent
+des parties libres : gagner un salon personnalisé n’attribue pas de palier solo.
+Les anciennes parties restent reprenables, avec leurs joueurs ; leurs résultats
+sans ces métadonnées de défi ne sont pas ajoutés rétroactivement à la progression.
+
+Les premières victoires sont enregistrées par compte dans le document `auth`
+PostgreSQL, avec le niveau, la date et l’identifiant du tour de jeu. La sauvegarde
+de la partie terminée précède l’attribution, et les attributions sont idempotentes.
+Après une interruption entre ces deux sauvegardes, le serveur reprend la
+validation du résultat conservé. Une reconnexion Google préserve les paliers.
+Les requêtes répétées et les rejeux d’un ancien niveau ne débloquent pas le
+palier d’après. Une sauvegarde refusée ne donne pas accès à un niveau supérieur.
+
+`GET /api/progression` exige la connexion Google et renvoie les niveaux validés
+et débloqués du compte. Ce résumé apparaît aussi dans le profil authentifié,
+`/api/my-games` et l’état privé du joueur. La progression d’un autre compte et
+les métadonnées privées du défi ne sont pas exposées. Le web et l’APK 1.0.21
+présentent les cadenas, le palier à gagner et le niveau disponible après victoire.
+Un changement de compte réinitialise immédiatement l’affichage des accès.
+
+Aucune nouvelle configuration de base n’est nécessaire si PostgreSQL est déjà
+actif. Sans PostgreSQL, la progression suit les limites des fichiers temporaires
+[documentées ici](BASE-DE-DONNEES.md). Les anciens APK restent soumis au contrôle
+serveur ; installer 1.0.21 pour afficher correctement les cadenas.
+
+Les tests vérifient les six paliers via l’API, les victoires et défaites réelles
+du moteur, les demandes falsifiées, les rejeux, le changement d’appareil et de
+compte, la conservation dans PostgreSQL après perte des fichiers, les erreurs de
+sauvegarde, ainsi que les menus et le message de victoire dans Chromium et Flutter.
