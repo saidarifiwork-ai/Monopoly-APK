@@ -11,10 +11,12 @@ class ApiException implements Exception {
   const ApiException(this.message,
       {this.sessionExpired = false,
       this.authenticationRequired = false,
+      this.seatMoved = false,
       this.statusCode});
   final String message;
   final bool sessionExpired;
   final bool authenticationRequired;
+  final bool seatMoved;
   final int? statusCode;
   @override
   String toString() => message;
@@ -82,6 +84,7 @@ class GameApi {
           message,
           statusCode: response.statusCode,
           authenticationRequired: result['code'] == 'AUTH_REQUIRED',
+          seatMoved: result['code'] == 'SEAT_MOVED',
           sessionExpired: result['code'] == 'ACCOUNT_MISMATCH' ||
               message == 'Salon introuvable' ||
               message == 'Session invalide.',
@@ -144,10 +147,17 @@ class RendererTransport {
       );
       return response(200, result);
     } on ApiException catch (error) {
-      return response(error.authenticationRequired ? 401 : 400, {
-        'error': error.message,
-        if (error.authenticationRequired) 'code': 'AUTH_REQUIRED'
-      });
+      return response(
+          error.authenticationRequired
+              ? 401
+              : error.seatMoved
+                  ? 409
+                  : 400,
+          {
+            'error': error.message,
+            if (error.authenticationRequired) 'code': 'AUTH_REQUIRED',
+            if (error.seatMoved) 'code': 'SEAT_MOVED'
+          });
     } catch (_) {
       return response(400, {'error': 'Requête du jeu invalide.'});
     }
@@ -212,6 +222,10 @@ class GameController extends ChangeNotifier {
   String? authToken;
   VoidCallback? onAuthenticationRequired;
   void setAuthToken(String? value) {
+    if (authToken != value) {
+      resumableGames = [];
+      gamesError = null;
+    }
     authToken = value;
     _api?.authToken = value;
   }
@@ -219,6 +233,10 @@ class GameController extends ChangeNotifier {
   Json? _session;
   GameState? state;
   String? error;
+  List<Json> resumableGames = [];
+  bool _handlingSeatMove = false;
+  bool discoveringGames = false;
+  String? gamesError;
   bool busy = false;
   bool connected = false;
   bool _disposed = false;
@@ -267,10 +285,79 @@ class GameController extends ChangeNotifier {
     } catch (_) {
       error = 'La session enregistrée ne peut pas être restaurée.';
     } finally {
+      if (authToken != null) await discoverGames();
       busy = false;
       _schedulePoll();
     }
     _notify();
+  }
+
+  Future<void> discoverGames() async {
+    if (_api == null || authToken == null || _disposed || discoveringGames) {
+      return;
+    }
+    discoveringGames = true;
+    final generation = _generation, accountToken = authToken;
+    try {
+      final result = await _api!.request('/api/my-games');
+      if (_disposed || generation != _generation || authToken != accountToken) {
+        return;
+      }
+      resumableGames = ((result['games'] ?? []) as List).cast<Json>();
+      gamesError = null;
+    } catch (_) {
+      if (generation == _generation && authToken == accountToken) {
+        gamesError = 'Impossible de vérifier vos parties en cours.';
+      }
+    } finally {
+      discoveringGames = false;
+      _notify();
+    }
+  }
+
+  Future<void> resume(String roomCode) async {
+    if (busy || _api == null || authToken == null) return;
+    busy = true;
+    error = null;
+    _timer?.cancel();
+    _notify();
+    try {
+      await _polling;
+      _generation++;
+      final result =
+          await _api!.request('/api/resume', data: {'code': roomCode});
+      _session = {'code': result['code'], 'token': result['token']};
+      state = null;
+      _paused = false;
+      _lastEvent = 0;
+      await preferences.setString(
+          'session', jsonEncode({..._session!, 'server': server}));
+      await poll(force: true);
+    } catch (e) {
+      error = e.toString();
+      if (e is ApiException && e.authenticationRequired) {
+        onAuthenticationRequired?.call();
+      }
+    } finally {
+      busy = false;
+      _schedulePoll();
+      _notify();
+    }
+  }
+
+  Future<void> handleSeatMoved() async {
+    if (_handlingSeatMove) return;
+    _handlingSeatMove = true;
+    try {
+      pause(true);
+      await leave();
+      error =
+          'Partie reprise sur un autre appareil. Reprenez-la ici pour continuer sur cet appareil.';
+      await discoverGames();
+    } finally {
+      _handlingSeatMove = false;
+      _notify();
+    }
   }
 
   Future<void> configure(String value) async {
@@ -358,6 +445,7 @@ class GameController extends ChangeNotifier {
       );
     } catch (e) {
       error = '$e';
+      if (e is ApiException && e.seatMoved) await handleSeatMoved();
       if (e is ApiException && e.authenticationRequired) {
         onAuthenticationRequired?.call();
       }
@@ -415,8 +503,9 @@ class GameController extends ChangeNotifier {
       connected = false;
       _failures++;
       error = e.toString();
-      if (e is ApiException && e.authenticationRequired) {
-        onAuthenticationRequired?.call();
+      if (e is ApiException && e.seatMoved) {
+        await handleSeatMoved();
+        return;
       }
       if (e is ApiException && e.authenticationRequired) {
         onAuthenticationRequired?.call();
@@ -424,7 +513,8 @@ class GameController extends ChangeNotifier {
       if (e is ApiException && e.sessionExpired) {
         await leave();
         error =
-            'Cette partie a disparu ou la session a expiré. Créez un nouveau salon.';
+            'Cette session de partie a expiré. Retrouvez vos parties sur l’accueil.';
+        await discoverGames();
       }
     }
     _notify();
@@ -450,7 +540,8 @@ class GameController extends ChangeNotifier {
     await _polling;
     try {
       await _api!.request('/api/action', data: {..._session!, 'type': 'leave'});
-    } catch (_) {
+    } on ApiException catch (e) {
+      if (e.seatMoved) await handleSeatMoved();
       rethrow;
     }
   }

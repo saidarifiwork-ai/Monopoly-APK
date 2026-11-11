@@ -9,11 +9,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>Number(n).toLocaleString('fr-FR');
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : (window.API_URL || '');
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
-async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
+async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(response.status===409&&result.code==='SEAT_MOVED')seatMoved();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
 function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 function formatTime(seconds){if(seconds>=60)return Math.floor(seconds/60)+'m '+seconds%60+'s';return seconds+'s'}
 function toast(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').style.display='none',4500)}
-async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
+async function api(path,data){const response=await fetch(API_BASE+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(10000)});const result=await response.json();if(response.status===401&&result.code==='AUTH_REQUIRED'){window.QuartiersAuth?.expire?.();window.dispatchEvent(new Event('quartiers-auth-expired'))}if(response.status===409&&result.code==='SEAT_MOVED')seatMoved();if(!response.ok)throw Error(result.error||'Erreur serveur');return result}
 function resetView(){gameSound.refusal.pause();document.querySelector('#victory-dialog')?.close();generation++;state=null;selected=-1;lastEvent=0;positions.clear();$('#board').querySelectorAll('.tile').forEach(n=>n.remove());$('#token-layer').replaceChildren();closeCard();animating=false;document.body.classList.remove('animating')}
 async function enter(create,mode){
  if(!window.QuartiersAuth?.allowed){toast('Connectez-vous avec Google pour jouer.');return;}
@@ -39,7 +39,7 @@ function poll(force=false){
    for(const event of events){if(ticket!==generation)return;await playEvent(event,next,ticket);lastEvent=event.id}
   }
   if(ticket!==generation)return;if(['opening','playing'].includes(next.phase)&&next.players[next.turn].id===next.me&&!next.players[next.turn].bot&&(state.phase!==next.phase||state.players[state.turn].id!==next.me))(gameSound.play('turn'),toast('🎲 À toi de jouer !'));state=next;state.players.forEach(p=>positions.set(p.id,p.pos));animating=false;document.body.classList.remove('animating');$('#activity').classList.remove('busy');render();
- }catch(e){if(ticket!==generation)return;$('#connection').textContent='● Connexion interrompue';animating=false;document.body.classList.remove('animating');if(e.message==='Salon introuvable'||e.message==='Session invalide.'){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false;toast('Le plateau a été mis à jour. Créez une nouvelle partie.')}else{toast('Connexion au serveur interrompue. Vérifiez Lancer.cmd.')}}})().finally(()=>{pollPromise=null});return pollPromise;
+ }catch(e){if(ticket!==generation)return;$('#connection').textContent='● Connexion interrompue';animating=false;document.body.classList.remove('animating');if(e.message==='Salon introuvable'||e.message==='Session invalide.'){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false;refreshAccountGames();toast('Retrouvez vos parties sur l’accueil.')}else{toast('Connexion au serveur interrompue. Vérifiez Lancer.cmd.')}}})().finally(()=>{pollPromise=null});return pollPromise;
 }
 function announce(text,playerId){$('#activity-text').textContent=text;if(playerId){document.querySelectorAll('.player').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId));document.querySelectorAll('.pawn').forEach(el=>el.classList.toggle('active',el.dataset.player===playerId))}}
 async function playEvent(e,next,ticket){
@@ -182,14 +182,14 @@ function render(){
 }
 $('#bot-level').onchange=()=>{const ultimate=$('#bot-level').value==='ultimate';$('#solo').textContent=ultimate?'Affronter deux robots Ultime →':'Jouer contre le robot →';$('.bot-help').textContent=ultimate?'Toi contre deux robots indépendants : chacun joue pour lui.':'Même argent, mêmes règles et mêmes dés pour tous.'};
 $('#solo').onclick=()=>enter(true,'solo');$('#create').onclick=()=>enter(true);$('#entry').onsubmit=e=>{e.preventDefault();enter(false)};$('#code').value=new URLSearchParams(location.search).get('room')||'';
-const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session;$('#entry').prepend(resumeButton);
+const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;$('#entry').prepend(resumeButton);
 resumeButton.onclick=()=>{suspended=false;localStorage.removeItem('quartiers-paused');poll(true)};
 $('#home').textContent='Quitter la partie';
 $('#home').onclick=async()=>{
  if(busy||animating){toast('Attendez la fin de cette action.');return}
  if(!confirm('Quitter la partie ? Un robot prendra le relais. Vous pourrez reprendre votre place sur cet appareil.'))return;
  busy=true;suspended=true;
- try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'});localStorage.setItem('quartiers-paused','yes');resetView();$('#game').hidden=true;$('#welcome').hidden=false;resumeButton.hidden=false}
+ try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'});localStorage.setItem('quartiers-paused','yes');resetView();$('#game').hidden=true;$('#welcome').hidden=false;resumeButton.hidden=false;refreshAccountGames()}
  catch(e){suspended=false;toast(e.message)}finally{busy=false}
 };
 $('#invite').onclick=async()=>{const url=location.origin+'/?room='+session.code;try{await navigator.clipboard.writeText(url);toast('Lien copié : '+url)}catch{toast(url)}};
@@ -321,12 +321,66 @@ function showVictory(s){
  gameSound.play('celebration');
 }
 
+let accountGames = [], cloudAccount = null, gamesRequest = null, gamesError = null;
+function renderAccountGames() {
+ const section = $('#account-games');if(!section)return;
+ section.replaceChildren();section.hidden=!(accountGames.length||gamesError);
+ if(section.hidden)return;
+ const title=document.createElement('h3');title.textContent='Vos parties en cours';section.append(title);
+ if(gamesError){const message=document.createElement('p');message.textContent=gamesError;const retry=document.createElement('button');retry.type='button';retry.className='secondary';retry.textContent='Actualiser mes parties';retry.onclick=()=>refreshAccountGames();section.append(message,retry);}
+ for(const game of accountGames){
+  const card=document.createElement('div');card.className='cloud-game';
+  const name=document.createElement('strong');name.textContent=(game.mode==='solo'?'Solo contre les robots':'Partie entre amis')+' · '+game.code;
+  const detail=document.createElement('p');detail.textContent=(game.phase==='lobby'?'Salon en attente':money(game.money)+' DH')+' · '+game.playerCount+' joueur'+(game.playerCount===1?'':'s');
+  const button=document.createElement('button');button.type='button';button.textContent=accountGames.length===1?'Reprendre ma partie':'Reprendre cette partie';button.disabled=busy;button.onclick=()=>resumeAccountGame(game.code);
+  card.append(name,detail,button);section.append(card);
+ }
+ if(session&&accountGames.some(game=>game.code===session.code))resumeButton.hidden=true;
+}
+async function refreshAccountGames() {
+ if(document.documentElement.classList.contains('quartiers-mobile')||!window.QuartiersAuth?.allowed)return;
+ const owner=window.QuartiersAuth.account.id;
+ if(cloudAccount!==owner){accountGames=[];gamesError=null;cloudAccount=owner;renderAccountGames();}
+ if(gamesRequest)return gamesRequest;
+ gamesRequest=api('/api/my-games').then(result=>{
+  if(window.QuartiersAuth?.account?.id!==owner)return;
+  accountGames=result.games||[];gamesError=null;renderAccountGames();
+ }).catch(()=>{if(window.QuartiersAuth?.account?.id===owner){gamesError='Impossible de vérifier vos parties. Réessayez dans un instant.';renderAccountGames();}}).finally(()=>{
+  gamesRequest=null;
+  if(window.QuartiersAuth?.allowed&&window.QuartiersAuth.account.id!==owner)refreshAccountGames();
+ });
+ return gamesRequest;
+}
+async function resumeAccountGame(code) {
+ if(busy||!window.QuartiersAuth?.allowed)return;
+ busy=true;renderAccountGames();
+ try{
+  if(pollPromise)await pollPromise;
+  suspended=true;
+  const result=await api('/api/resume',{code});
+  resetView();session={code:result.code,token:result.token,accountId:window.QuartiersAuth.account.id};
+  sessionStorage.setItem('quartiers',JSON.stringify(session));localStorage.setItem('quartiers',JSON.stringify(session));
+  suspended=false;localStorage.removeItem('quartiers-paused');await poll(true);
+ }catch(error){toast(error.message);}
+ finally{busy=false;renderAccountGames();refreshAccountGames();}
+}
+function seatMoved() {
+ suspended=true;resetView();session=null;
+ sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resumeButton.hidden=true;
+ $('#game').hidden=true;$('#welcome').hidden=false;
+ toast('Partie reprise sur un autre appareil. Vous pouvez la reprendre ici.');refreshAccountGames();
+}
+
 // An account switch must never restore another person's locally saved seat.
 window.addEventListener('quartiers-account', event => {
- if(event.detail){if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session;}
+ if(event.detail){if(session&&session.accountId!==event.detail.id){session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView()}resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;refreshAccountGames();}
  else{resetView();resumeButton.hidden=true;$('#game').hidden=true;$('#welcome').hidden=false;}
 });
 window.addEventListener('quartiers-auth-expired',()=>{resetView();$('#game').hidden=true;$('#welcome').hidden=false});
 window.addEventListener('quartiers-before-logout',()=>{generation++;suspended=true;session=null;sessionStorage.removeItem('quartiers');localStorage.removeItem('quartiers');resetView();$('#game').hidden=true;$('#welcome').hidden=false});
 
 window.quartiersLeaveForLogout = async () => {if(session){try{if(pollPromise)await pollPromise;await api('/api/action',{...session,type:'leave'})}catch(_) {}}};
+
+// Refresh discovery when returning to this device; it never claims a seat.
+window.addEventListener('focus',()=>{if(!$('#welcome').hidden)refreshAccountGames();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('#welcome').hidden)refreshAccountGames();});

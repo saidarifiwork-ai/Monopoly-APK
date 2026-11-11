@@ -104,8 +104,9 @@ pas les jetons utilisables par un navigateur ou un téléphone. Si le fichier es
 conservé, un redémarrage recharge les sessions ; une déconnexion les invalide
 également dans le fichier. Le cookie web possède une expiration persistante.
 
-La même identité Google peut reprendre sa place avec le code du salon, sur un
-autre appareil, même après le début de la partie. Elle ne crée pas un second
+La même identité Google retrouve ses parties depuis l’accueil sur un autre
+appareil, même après le début de la partie, sans ressaisir le code du salon.
+La reprise avec le code reste aussi possible. Elle ne crée pas un second
 joueur dans ce salon. Un autre compte ne peut pas reprendre sa place avec son
 seul jeton de partie. Les comptes et e-mails ne sont pas exposés dans l'état public.
 
@@ -174,3 +175,37 @@ la révocation après redémarrage, l’expiration, la fermeture/réouverture d�
 la reprise après une erreur réseau et le renouvellement Android simulé. Ces essais
 ne garantissent pas que Google autorisera toujours une connexion silencieuse sur
 un appareil réel.
+
+
+## Reprendre sa partie entre le web et Android
+
+Après connexion au même compte Google, l’accueil web et Android affiche les
+parties actives de ce compte, même si aucun code de salon n’est enregistré sur
+cet appareil. « Reprendre ma partie » transfère le contrôle de la place choisie.
+Plusieurs parties sont proposées séparément. Les salons en attente, les parties
+solo avec robots et les parties entre amis sont pris en charge ; les parties
+terminées et les places éliminées sont exclues.
+
+Le serveur conserve la même place, les terrains, l’argent, la position, les dés
+et les adversaires. Si un robot temporaire jouait pour cette place, le joueur
+reprend le contrôle. Un simple affichage de l’accueil ne touche pas la présence
+et ne reprend pas la place à l’autre appareil.
+
+`GET /api/my-games` exige une session Google vérifiée et renvoie uniquement des
+résumés des parties appartenant au compte, sans jeton de jeu. `POST /api/resume`
+vérifie la participation du compte puis renouvelle le jeton de cette place.
+Les anciennes commandes, y compris un départ envoyé tardivement, sont refusées
+avec `409 SEAT_MOVED`. Les clients reviennent à l’accueil sans déconnecter Google.
+Rejoindre manuellement le salon avec le même compte effectue aussi ce transfert.
+
+Cette reprise s’appuie sur les parties présentes sur le serveur commun. Elle ne
+crée pas une sauvegarde dans Google Drive et ne rend pas durable le disque
+éphémère de Render. Si la sauvegarde du salon disparaît, le compte Google ne
+suffit pas à recréer la partie. Voir les limites de stockage ci-dessus.
+
+Les tests couvrent le transfert web → Android → web, l’absence de code local,
+les parties entre amis et solo Ultime, le retour du robot temporaire, les droits
+entre comptes et les commandes de l’ancien appareil. Le navigateur vérifie les
+boutons et l’affichage desktop/téléphone avec un fournisseur Google simulé ; les
+tests Flutter incluent un serveur Node réel local. Aucun essai sur téléphone
+physique n’est revendiqué.

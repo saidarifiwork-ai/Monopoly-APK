@@ -267,8 +267,13 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) =>
-      c.pause(c.state != null || state != AppLifecycleState.resumed);
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    c.pause(c.state != null || state != AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed && a.account != null) {
+      unawaited(c.discoverGames());
+    }
+  }
+
   @override
   void dispose() {
     accountRetry?.cancel();
@@ -360,6 +365,13 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> resumeGame(String code) async {
+    await c.resume(code);
+    if (mounted && c.state != null && c.error == null) {
+      setState(() => gameOpened = true);
+    }
+  }
+
   void message(String value) {
     if (mounted) {
       ScaffoldMessenger.of(context)
@@ -392,12 +404,13 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
     leaving = true;
     try {
       if (await confirm('Quitter la partie ?',
-          'Un robot prendra le relais. Vous pourrez reprendre votre place depuis cet appareil.')) {
+          'Un robot prendra le relais. Vous pourrez reprendre votre place avec le même compte Google.')) {
         try {
           // Dispose the renderer and stop its heartbeat before handing over.
           if (mounted) setState(() => gameOpened = false);
           await WidgetsBinding.instance.endOfFrame;
           await c.relinquish();
+          await c.discoverGames();
         } catch (_) {
           if (mounted) message('Impossible de prévenir le serveur. Réessayez.');
         }
@@ -555,11 +568,61 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                                 child: TextButton(
                                     onPressed: c.busy ? null : signOut,
                                     child: const Text('Se déconnecter'))),
+                            if (c.gamesError != null) ...[
+                              Text(c.gamesError!),
+                              TextButton(
+                                  onPressed: c.discoveringGames
+                                      ? null
+                                      : c.discoverGames,
+                                  child: const Text('Actualiser mes parties')),
+                            ],
+                            for (final game in c.resumableGames.where((g) =>
+                                c.state == null || g['code'] != c.code)) ...[
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFFE5EDDF),
+                                    borderRadius: BorderRadius.circular(16)),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                          game['mode'] == 'solo'
+                                              ? 'Partie solo en cours'
+                                              : 'Partie entre amis en cours',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                          'Salon ${game['code']} · ${game['playerCount']} joueurs'),
+                                      const SizedBox(height: 12),
+                                      FilledButton.icon(
+                                          onPressed: c.busy
+                                              ? null
+                                              : () => resumeGame(
+                                                  game['code'] as String),
+                                          icon: const Icon(Icons.play_arrow),
+                                          label: Text(
+                                              c.resumableGames.length == 1
+                                                  ? 'Reprendre ma partie'
+                                                  : 'Reprendre cette partie')),
+                                    ]),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             if (c.state != null) ...[
                               FilledButton.icon(
                                 onPressed: c.busy
                                     ? null
-                                    : () => setState(() => gameOpened = true),
+                                    : () {
+                                        if (c.resumableGames
+                                            .any((g) => g['code'] == c.code)) {
+                                          unawaited(resumeGame(c.code));
+                                        } else {
+                                          setState(() => gameOpened = true);
+                                        }
+                                      },
                                 icon: const Icon(Icons.play_arrow),
                                 label: const Text('Reprendre ma partie'),
                               ),

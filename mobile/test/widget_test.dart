@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quartiers_mobile/game.dart';
@@ -8,6 +11,60 @@ import 'game_test.dart' show fixture;
 import 'account_fakes.dart';
 
 void main() {
+  for (final cached in [false, true]) {
+    testWidgets('resume from welcome with cached session: $cached',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'server': 'https://test.example',
+        if (cached)
+          'session': jsonEncode({
+            'server': 'https://test.example',
+            'code': 'ABC234',
+            'token': 'old-seat'
+          })
+      });
+      var claimed = false;
+      final c = GameController(await SharedPreferences.getInstance(),
+          apiFactory: (uri) => GameApi(uri, client: MockClient((r) async {
+                if (r.url.path == '/api/my-games') {
+                  return http.Response(
+                      jsonEncode({
+                        'games': [
+                          {
+                            'code': 'ABC234',
+                            'mode': 'friends',
+                            'playerCount': 2,
+                            'money': 1500,
+                            'phase': 'playing'
+                          }
+                        ]
+                      }),
+                      200);
+                }
+                if (r.url.path == '/api/resume') {
+                  claimed = true;
+                  return http.Response(
+                      '{"code":"ABC234","token":"new-seat"}', 200);
+                }
+                return http.Response(jsonEncode(fixture()), 200);
+              })));
+      await tester.pumpWidget(QuartiersApp(
+          controller: c,
+          accountController: SignedInTestAccount(),
+          gameViewBuilder: (game, onHome) =>
+              const Center(child: Text('Partie retrouvée'))));
+      await tester.pumpAndSettle();
+      expect(find.text('Reprendre ma partie'), findsOneWidget);
+      await tester.ensureVisible(find.text('Reprendre ma partie'));
+      await tester.tap(find.text('Reprendre ma partie'));
+      await tester.pumpAndSettle();
+      expect(find.text('Partie retrouvée'), findsOneWidget);
+      expect(c.state!.me, 'a');
+      expect(claimed, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
   testWidgets('six bot difficulties can be selected on the native welcome',
       (tester) async {
     SharedPreferences.setMockInitialValues({'server': ''});
@@ -43,7 +100,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
-    final c = GameController(await SharedPreferences.getInstance());
+    final c = GameController(await SharedPreferences.getInstance(),
+        apiFactory: (server) => GameApi(server,
+            client: MockClient(
+                (_) async => http.Response(jsonEncode({'games': []}), 200))));
     await tester.pumpWidget(
         QuartiersApp(controller: c, accountController: SignedInTestAccount()));
     await tester.pump();

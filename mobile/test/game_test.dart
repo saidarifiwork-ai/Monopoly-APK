@@ -81,6 +81,77 @@ Json fixture() => {
     };
 
 void main() {
+  test(
+      'discover a remote game without a saved room, resume and relinquish stale control',
+      () async {
+    SharedPreferences.setMockInitialValues({'server': 'https://test.example'});
+    final prefs = await SharedPreferences.getInstance();
+    var moved = false, reads = 0;
+    final c = GameController(prefs,
+        apiFactory: (uri) => GameApi(uri, client: MockClient((r) async {
+              expect(r.headers['Authorization'], 'Bearer google-session');
+              if (r.url.path == '/api/my-games') {
+                return http.Response(
+                    jsonEncode({
+                      'games': [
+                        {
+                          'code': 'ABC234',
+                          'mode': 'friends',
+                          'playerCount': 2,
+                          'money': 1500,
+                          'phase': 'playing'
+                        }
+                      ]
+                    }),
+                    200);
+              }
+              if (r.url.path == '/api/resume') {
+                expect(jsonDecode(r.body), {'code': 'ABC234'});
+                return http.Response(
+                    '{"code":"ABC234","token":"fresh-seat"}', 200);
+              }
+              reads++;
+              expect(r.url.queryParameters['token'], 'fresh-seat');
+              return moved
+                  ? http.Response(
+                      '{"code":"SEAT_MOVED","error":"Partie reprise sur un autre appareil."}',
+                      409)
+                  : http.Response(jsonEncode(fixture()), 200);
+            })));
+    c.setAuthToken('google-session');
+    await c.restore();
+    expect(c.code, isEmpty);
+    expect(c.resumableGames.single['code'], 'ABC234');
+    expect(c.discoveringGames, isFalse);
+    await c.resume('ABC234');
+    expect(c.state!.me, 'a');
+    expect(c.state!.tiles[1]['owner'], 'a');
+    expect(jsonDecode(prefs.getString('session')!)['token'], 'fresh-seat');
+    moved = true;
+    await c.poll();
+    expect(c.state, isNull);
+    expect(prefs.getString('session'), isNull);
+    expect(c.authToken, 'google-session');
+    expect(c.resumableGames.single['code'], 'ABC234');
+    expect(c.error, contains('autre appareil'));
+    final count = reads;
+    await c.poll();
+    expect(reads, count);
+    c.dispose();
+  });
+
+  test('renderer preserves the seat transfer signal', () async {
+    final api = GameApi(Uri.parse('https://test.example'),
+        client: MockClient((_) async => http.Response(
+            '{"error":"Partie reprise ailleurs","code":"SEAT_MOVED"}', 409)));
+    final result =
+        await RendererTransport(api, {'code': 'ABC234', 'token': 'old'})
+            .handle({'url': '/api/state', 'method': 'GET'});
+    expect(result['status'], 409);
+    expect(jsonDecode(result['body'])['code'], 'SEAT_MOVED');
+    api.close();
+  });
+
   test('voluntary leave keeps the session and stops heartbeats until resume',
       () async {
     SharedPreferences.setMockInitialValues({

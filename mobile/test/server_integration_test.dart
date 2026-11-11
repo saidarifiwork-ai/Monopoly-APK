@@ -72,6 +72,32 @@ void main() {
       expect(next.player['money'], s.player['money'] - 1);
     }
     await action(current, 'end');
+    // A second device knows the Google account, but has never saved this room.
+    final otherDevice = GameApi(serverUri(address));
+    addTearDown(otherDevice.close);
+    await authenticate(otherDevice, 'said');
+    final discovered =
+        (await otherDevice.request('/api/my-games'))['games'] as List;
+    expect(discovered.any((g) => g['code'] == host['code']), isTrue);
+    final before = await state(host);
+    final claimed =
+        await otherDevice.request('/api/resume', data: {'code': host['code']});
+    final transferred = GameState(await otherDevice.request('/api/state',
+        query: {'code': claimed['code'], 'token': claimed['token']}));
+    expect(transferred.me, before.me);
+    expect(transferred.player['money'], before.player['money']);
+    expect(transferred.player['pos'], before.player['pos']);
+    await expectLater(state(host),
+        throwsA(isA<ApiException>().having((e) => e.seatMoved, 'moved', true)));
+    final returned =
+        await api.request('/api/resume', data: {'code': host['code']});
+    host['token'] = returned['token'];
+    expect((await state(host)).me, before.me);
+    await expectLater(
+        otherDevice.request('/api/state',
+            query: {'code': claimed['code'], 'token': claimed['token']}),
+        throwsA(isA<ApiException>().having((e) => e.seatMoved, 'moved', true)));
+
     final solo = await api.request('/api/create',
         data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'ultimate'});
     s = await state(solo);

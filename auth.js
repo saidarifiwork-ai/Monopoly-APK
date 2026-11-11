@@ -115,7 +115,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
             saveSessions();
             res.setHeader('Set-Cookie', cookie(req, '', 0));res.json({ok: true});
         });
-        for (const route of ['/api/create', '/api/join', '/api/state', '/api/action']) app.use(route, requireAccount);
+        for (const route of ['/api/create', '/api/join', '/api/state', '/api/action', '/api/my-games', '/api/resume']) app.use(route, requireAccount);
     }
     return {install};
 }

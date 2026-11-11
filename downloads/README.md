@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.17 — connexion Google
+# Quartiers Maroc pour Android — version 1.0.18 — connexion Google
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.17.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.18.apk)
 
 Cette version exige la connexion Google et remplace les anciens APK lors du
 déploiement du serveur avec authentification. Les clients Google Web et Android
@@ -15,7 +15,7 @@ La connexion enregistrée est reprise à l’ouverture. Une erreur réseau conse
 Le compte de jeu est créé après la connexion Google ; le nom et la photo du
 profil sont utilisés sur le web et Android. La connexion est obligatoire pour
 créer, rejoindre et jouer. Un compte Google peut reprendre la même place depuis
-un autre appareil avec le code du salon.
+un autre appareil sans ressaisir le code du salon : « Reprendre ma partie » affiche ses parties en cours après connexion au même compte Google. Le transfert fonctionne du web vers Android et inversement, en solo ou entre amis. Il conserve le pion, les biens, l’argent et les adversaires. Seul le nouvel appareil contrôle cette place ; l’ancien revient à l’accueil. Ouvrir l’accueil ne transfère pas le contrôle.
 
 Le nouvel accueil utilise l’image fournie comme fond sur le web et dans l’APK, avec un panneau de commandes lisible.
 
@@ -31,7 +31,7 @@ Cette version reprend **le vrai plateau du site**, ses pions SVG, les dés, les 
 
 L’aperçu du rendu embarqué est contrôlé dans Chromium à une taille de téléphone ; il ne constitue pas un essai sur téléphone physique. Les tests de l’application et de l’API, les vérifications du rendu original et la signature de l’APK ont été contrôlés. La somme SHA-256 est fournie dans le fichier voisin.
 
-Version d’essai signée avec une clé de développement, pas une publication Google Play. Le serveur configuré est `https://monopoly-bw6e.onrender.com`, modifiable dans les réglages de l’accueil. Les joueurs web doivent ouvrir cette même adresse Render. Les salons sont stockés en mémoire et sont perdus lors d’un redémarrage du serveur.
+Version d’essai signée avec une clé de développement, pas une publication Google Play. Le serveur configuré est `https://monopoly-bw6e.onrender.com`, modifiable dans les réglages de l’accueil. Les joueurs web doivent ouvrir cette même adresse Render. Les salons sont sauvegardés dans `ROOMS_FILE` et rechargés au démarrage. Sur le disque éphémère de Render gratuit, un remplacement de l’instance peut supprimer ces sauvegardes ; seules les parties encore présentes sur le serveur peuvent être reprises.
 
 Le code se trouve dans `../mobile/`. Le fichier sans numéro de version est aussi actualisé pour les anciens liens.
 
