@@ -1,32 +1,39 @@
-# Mélange et pioche des cartes
+# Chance et Caisse commune
 
-Le serveur prépare deux paquets indépendants de 16 cartes : Chance et Caisse
-commune. Ils sont mélangés avant le tirage de l’ordre des joueurs, à chaque
-lancement de partie, y compris après « Rejouer ».
+Le serveur commun prépare deux paquets distincts de 16 cartes avant le tirage
+initial de l’ordre des joueurs. Chaque nouvelle partie, y compris après
+« Rejouer », reçoit deux nouveaux mélanges Fisher–Yates utilisant les nombres
+aléatoires cryptographiques de Node.js. Toutes les cases Chance puisent dans le
+même paquet Chance ; toutes les cases Caisse commune dans le même paquet Caisse.
+Le web et l’APK affichent le résultat envoyé par ce serveur.
 
-Le mélange Fisher–Yates utilise les entiers aléatoires uniformes de Node.js
-(`crypto.randomInt`), au lieu du tri biaisé `sort(() => Math.random() - 0.5)`.
-Il ne modifie pas les dés ni les décisions des robots.
+La version de mélange 4 vérifie les identifiants, l’unicité et le contenu des
+cartes sauvegardées. L’ancienne vérification acceptait deux simples tableaux,
+même réduits à quelques cartes : mélanger ces tableaux ne restaurait pas les
+cartes manquantes. Les paquets anciens ou invalides sont désormais reconstruits
+à partir du catalogue complet, puis mélangés. L’argent, les terrains, les
+positions et les cartes de sortie de prison détenues sont conservés.
 
-Toutes les cases Chance et tous les joueurs partagent une même file de cartes
-Chance dans un salon. Les cases Caisse commune partagent leur propre file.
-La carte du dessus est appliquée puis placée sous le paquet. Une carte de
-sortie de prison est conservée par le joueur et revient sous son paquet
-lorsqu’elle est utilisée ou rendue à la banque.
+Une partie valide conserve l’ordre de ses cartes quand on la reprend, change
+d’appareil ou redémarre le serveur. Une carte tirée retourne sous son paquet,
+sauf la sortie de prison gardée par le joueur jusqu’à utilisation ou faillite.
+Il peut arriver que deux nouvelles parties aient la même première carte : le
+mélange ne force pas une carte différente au prix d’un tirage biaisé.
 
-Chaque salon possède ses propres paquets. Les tours et les tirages ne relancent
-pas le mélange. Lorsqu’une partie enregistrée contient déjà ses paquets, leur
-ordre est conservé. Le correctif prend donc effet au lancement d’une nouvelle
-partie ; il ne change pas les cartes encore en attente d’une partie en cours.
+## Vérification de livraison
 
-Une même carte peut naturellement apparaître en premier dans deux nouvelles
-parties : le hasard ne garantit pas une première carte différente à chaque fois.
-Aucune case n’impose Victoria, Ouarzazate ou une autre destination.
+`/api/health` doit annoncer `"version":25` et `"cardShuffle":4` (ou une version
+ultérieure). Un commit GitHub publié ne prouve pas que Render l’a déployé.
+La correction concerne le serveur : aucun nouvel APK n’est nécessaire.
 
-Le serveur ne transmet pas les paquets cachés dans `/api/state`. Le moteur des
-robots ne les consulte pas. Le même tirage s’applique au web, à l’APK et au PC
-quand ces clients sont présents dans une partie commune.
+## Tests
 
-Tests : `node --test test/cards.test.js` puis `node --test test/*.test.js`.
-Les tests couvrent les permutations, les démarrages et rejeux, la pioche commune,
-l’indépendance des salons, la restauration des parties et les cartes conservées.
+`node --test test/cards.test.js` vérifie la préparation avant le tirage initial,
+les replays, les six cases, l’indépendance des salons, les sauvegardes tronquées
+ou dupliquées et le retour des cartes de prison. Il exerce aussi le véritable
+mélange cryptographique, indépendamment des tests à hasard contrôlé.
+
+Avec `POSTGRES_TEST_URL` pointant exclusivement vers une base de test séparée,
+`node --test test/database.test.js` vérifie la réparation des documents
+PostgreSQL et la conservation de leur ordre après redémarrage et changement
+d’appareil. Ces tests ne doivent jamais viser la base de production.

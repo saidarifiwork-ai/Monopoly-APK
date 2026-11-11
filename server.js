@@ -11,7 +11,7 @@ const {createAuth} = require('./auth');
 const {openDatabase} = require('./database');
 const soloProgression = require('./solo-progression');
 const BOT_ACTION = Symbol('bot action');
-const CARD_SHUFFLE_VERSION = 3;
+const CARD_SHUFFLE_VERSION = 4;
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -299,7 +299,7 @@ function settleDebts(s) {
     }
 }
 
-function newCardDecks() {
+function cardCatalogue() {
     const newCard = (title, text, effect, value = 0) => ({title, text, effect, value});
     
     const chance = [
@@ -340,28 +340,58 @@ function newCardDecks() {
         newCard('Heritage familial', 'Recevez un heritage de 100 DH.', 'cash', 100)
     ];
     
-    return {
-        chance: shuffle(chance),
-        chest: shuffle(chest)
-    };
+    return Object.fromEntries(Object.entries({chance, chest}).map(([kind, cards]) =>
+        [kind, cards.map((card, index) => ({id: `${kind}-${index + 1}`, ...card}))]));
 }
 
-// Saved games from older releases had no shuffle provenance. Migrate each
-// remaining queue once, without replacing cards held by players or resetting
-// anyone's money/position. New games always receive two entirely new decks.
+function newCardDecks() {
+    return Object.fromEntries(Object.entries(cardCatalogue()).map(([kind, cards]) => [kind, shuffle(cards)]));
+}
+
+// Validate the full catalogue, not just the existence of two arrays: old saves
+// can contain shortened or duplicated queues despite having a shuffle version.
+// Repair those queues from the complete catalogue, never from the damaged list.
+// A valid ongoing game keeps its order on draws, reconnects and server restarts.
 function prepareCardDecks(s, fresh = false) {
-    if (!fresh && s.cardShuffleVersion === CARD_SHUFFLE_VERSION &&
-        Array.isArray(s.decks?.chance) && Array.isArray(s.decks?.chest)) return;
-    const held = new Set((s.players || []).flatMap(p => (p.jailCards || []).map(c => c.deck)));
-    if (fresh || !s.decks) {
+    const catalogue = cardCatalogue();
+    const heldKinds = new Set();
+    for (const player of s.players || []) {
+        player.jailCards = (Array.isArray(player.jailCards) ? player.jailCards : []).filter(held => {
+            if (!held || !['chance', 'chest'].includes(held.deck) || heldKinds.has(held.deck)) return false;
+            held.card = catalogue[held.deck].find(card => card.effect === 'free');
+            heldKinds.add(held.deck);
+            return true;
+        });
+    }
+    if (fresh) {
         s.decks = newCardDecks();
-        if (!fresh) for (const kind of held) s.decks[kind] = s.decks[kind].filter(c => c.effect !== 'free');
-    } else {
-        const missing = ['chance', 'chest'].some(kind => !Array.isArray(s.decks[kind])) ? newCardDecks() : null;
-        s.decks = Object.fromEntries(['chance', 'chest'].map(kind => [kind,
-            Array.isArray(s.decks[kind]) ? shuffle(s.decks[kind]) : missing[kind].filter(c => c.effect !== 'free' || !held.has(kind))]));
+        for (const kind of heldKinds) s.decks[kind] = s.decks[kind].filter(card => card.effect !== 'free');
+        s.cardShuffleVersion = CARD_SHUFFLE_VERSION;
+        return;
+    }
+    const migrate = s.cardShuffleVersion !== CARD_SHUFFLE_VERSION;
+    const hadDecks = !!s.decks;
+    if (!s.decks || typeof s.decks !== 'object' || Array.isArray(s.decks)) s.decks = {};
+    let repaired = false;
+    for (const [kind, cards] of Object.entries(catalogue)) {
+        const expected = cards.filter(card => card.effect !== 'free' || !heldKinds.has(kind));
+        const byId = new Map(expected.map(card => [card.id, card]));
+        const queue = s.decks[kind];
+        const valid = Array.isArray(queue) && queue.length === expected.length &&
+            new Set(queue.map(card => card?.id)).size === expected.length &&
+            queue.every(card => {
+                const original = byId.get(card?.id);
+                return original && ['title', 'text', 'effect', 'value'].every(key => card[key] === original[key]);
+            });
+        if (migrate || !valid) {
+            s.decks[kind] = shuffle(expected);
+            repaired = true;
+        }
     }
     s.cardShuffleVersion = CARD_SHUFFLE_VERSION;
+    if (repaired && hadDecks) {
+        addLog(s, 'Les paquets Chance et Caisse commune ont été vérifiés ; les paquets anciens ou incomplets ont été reconstitués et mélangés.');
+    }
 }
 
 function resolveLanding(s, p, multiplier = 1, utilityRoll = false) {
@@ -1229,7 +1259,7 @@ async function claimAccountSeat(s, p) {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 24, soloProgression: true, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 5, ultimateSoloOpponents: 4, botLevels: botAI.LEVELS.map(({id,name,opponents,lookahead})=>({id,name,soloOpponents:opponents,lookahead}))});
+    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 25, soloProgression: true, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 5, ultimateSoloOpponents: 4, botLevels: botAI.LEVELS.map(({id,name,opponents,lookahead})=>({id,name,soloOpponents:opponents,lookahead}))});
 });
 
 app.get('/api/my-games', (req, res) => {

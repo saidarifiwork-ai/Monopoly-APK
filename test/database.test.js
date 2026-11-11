@@ -226,3 +226,37 @@ test('earned solo levels persist in PostgreSQL across device changes, sign-in an
  assert.equal((await h.call('/api/create',{mode:'solo',botLevel:'easy'},fresh)).status,200);
  assert.equal((await h.call('/api/create',{mode:'solo',botLevel:'normal'},fresh)).status,403);
 });
+
+test('PostgreSQL repairs old and current truncated card decks once and keeps repaired order on restart', {skip:!address,timeout:30000},async t=>{
+    const db=await isolatedDatabase(t),h=await serverHarness(t,db.url);
+    await h.start();
+    const web=await h.login('said','web'),phone=await h.login('said'),friend=await h.login('abdo');
+    let seat=(await h.call('/api/create',{},web)).body;
+    await h.call('/api/join',{code:seat.code},friend);
+    assert.equal((await h.call('/api/action',{...seat,type:'start'},web)).status,200);
+    await h.stop();
+    const readRooms=async()=>(await db.pool.query("SELECT value FROM quartiers_documents WHERE key='rooms'")).rows[0].value;
+    for(const version of [3,4]) {
+        const rooms=await readRooms(),room=rooms[seat.code],p=room.players[0];
+        room.phase='playing';room.cardShuffleVersion=version;
+        room.decks.chance=room.decks.chance.filter(c=>[39,24].includes(c.value));
+        room.decks.chest=room.decks.chest.slice(0,2);
+        p.jailCards=[{deck:'chance',card:{effect:'free'}}];p.money=777;p.pos=19;room.tiles[19].owner=p.id;
+        await db.pool.query("UPDATE quartiers_documents SET value=$1::jsonb WHERE key='rooms'",[JSON.stringify(rooms)]);
+        await h.start();
+        assert.equal((await h.call('/api/health')).body.cardShuffle,4);
+        const resuming=await h.call('/api/resume',{code:seat.code},phone);assert.equal(resuming.status,200);seat=resuming.body;
+        const state=await h.state(seat,phone);assert.equal(state.status,200);
+        assert.equal(state.body.cardShuffleVersion,4);assert(!('decks' in state.body),'future cards stay private');
+        assert.equal(state.body.players[0].money,777);assert.equal(state.body.players[0].pos,19);assert.equal(state.body.tiles[19].owner,p.id);
+        const repaired=(await readRooms())[seat.code];
+        assert.equal(repaired.decks.chance.length,15);assert.equal(repaired.decks.chest.length,16);
+        assert.equal(repaired.players[0].jailCards[0].card.id,'chance-9');
+        for(const kind of ['chance','chest'])assert.equal(new Set(repaired.decks[kind].map(c=>c.id)).size,repaired.decks[kind].length);
+        await h.stop('SIGKILL');await h.start();
+        const again=await h.call('/api/resume',{code:seat.code},web);assert.equal(again.status,200);seat=again.body;
+        const restored=(await readRooms())[seat.code];
+        assert.deepEqual(restored.decks,repaired.decks,'valid queues must not change on a device switch or server restart');
+        await h.stop();
+    }
+});
