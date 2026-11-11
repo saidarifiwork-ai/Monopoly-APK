@@ -51,8 +51,10 @@ chez un fournisseur.
 Le Blueprint `render.yaml` contient ces deux variables et une instance de serveur.
 Pour un service existant configuré manuellement, ajouter les variables dans son
 onglet Environment ; modifier le fichier YAML dans GitHub ne les renseigne pas
-à sa place. Le paramètre `DATABASE_URL` du Blueprint est saisi comme secret lors
-de son installation et ne contient aucune valeur privée dans le dépôt.
+à sa place. Les valeurs du Blueprint sont saisies lors de son installation : renseigner
+`DATABASE_URL` avec l’adresse privée et `REQUIRE_DATABASE` avec `true`. Elles ne
+sont pas imposées automatiquement à un service existant avant le raccordement
+de sa base. Le dépôt ne contient aucune adresse privée.
 
 ## Données conservées et migration
 
