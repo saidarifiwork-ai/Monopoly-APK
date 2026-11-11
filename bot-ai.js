@@ -1,15 +1,16 @@
 // Decisions use public state only: never inspect decks or change dice/money.
 const LEVELS = [
- {id:'beginner',name:'Débutant',reserve:50,buyChance:.5,bid:.45,builds:0,skill:0},
- {id:'easy',name:'Facile',reserve:100,buyChance:.8,bid:.65,builds:1,skill:1},
- {id:'normal',name:'Normal',reserve:150,buyChance:1,bid:.9,builds:1,skill:2},
- {id:'hard',name:'Difficile',reserve:180,buyChance:1,bid:1.1,builds:2,skill:3},
- {id:'expert',name:'Expert',reserve:220,buyChance:1,bid:1.25,builds:3,skill:4},
- {id:'ultimate',name:'Ultime',reserve:250,buyChance:1,bid:1.4,builds:5,skill:5}
+ {id:'beginner',name:'Débutant',reserve:50,buyChance:.5,bid:.45,builds:1,skill:0,opponents:1,lookahead:0},
+ {id:'easy',name:'Facile',reserve:100,buyChance:.8,bid:.65,builds:1,skill:1,opponents:1,lookahead:0},
+ {id:'normal',name:'Normal',reserve:150,buyChance:1,bid:.9,builds:1,skill:2,opponents:1,lookahead:1},
+ {id:'hard',name:'Difficile',reserve:180,buyChance:1,bid:1.1,builds:2,skill:3,opponents:2,lookahead:1},
+ {id:'expert',name:'Expert',reserve:220,buyChance:1,bid:1.25,builds:3,skill:4,opponents:3,lookahead:2},
+ {id:'ultimate',name:'Ultime',reserve:250,buyChance:1,bid:1.4,builds:5,skill:5,opponents:4,lookahead:4}
 ];
 function protectsHumanAssets(p) {return !!(p && (p.temporaryBot || p.autoPlay));}
 function normalize(id='normal') {if (!LEVELS.some(l=>l.id===id)) throw Error('Niveau de robot invalide.');return id;}
 function profile(p) {return LEVELS.find(l=>l.id===p.botLevel)||LEVELS[2];}
+function soloOpponents(level) {return profile({botLevel:normalize(level)}).opponents;}
 function group(s,t) {return t.kind==='property'?s.tiles.filter(x=>x.kind==='property'&&x.group===t.group):[];}
 function rent(s,t) {
  if(!t.owner||t.mortgaged)return 0;
@@ -17,19 +18,25 @@ function rent(s,t) {
  if(t.kind==='utility')return s.tiles.filter(x=>x.kind==='utility'&&x.owner===t.owner).length===2?70:28;
  const g=group(s,t);return t.level>0?(t.rents?.[t.level]||t.rent):(t.rent||0)*(g.length&&g.every(x=>x.owner===t.owner)?2:1);
 }
-// Approximate two future turns from public positions and fair two-dice odds.
+// Approximate future turns from public positions and fair two-dice odds.
+// Bounded, position-only caching keeps four-opponent planning inexpensive.
+const landingCache = new Map();
 // Unknown Chance/Chest cards are deliberately not inspected.
 function landingWeights(s,p,turns=2) {
- let positions=new Map([[p.jail?10:(p.pos||0),1]]);const weights=new Array(s.tiles.length).fill(0);
+ const start=p.jail?10:(p.pos||0),key=[s.tiles.length,start,turns].join(':');
+ if(landingCache.has(key))return landingCache.get(key);
+ let positions=new Map([[start,1]]);const weights=new Array(s.tiles.length).fill(0);
  for(let turn=0;turn<turns;turn++){
   const next=new Map();
   for(const [pos,prob] of positions)for(let n=2;n<=12;n++){
    let at=(pos+n)%s.tiles.length;const chance=prob*(6-Math.abs(7-n))/36;
    if(at===30&&s.tiles.length===40)at=10;
-   next.set(at,(next.get(at)||0)+chance);weights[at]+=chance*(turn===0?1:.5);
+   next.set(at,(next.get(at)||0)+chance);weights[at]+=chance*.5**turn;
   }
   positions=next;
  }
+ if(landingCache.size>=512)landingCache.delete(landingCache.keys().next().value);
+ landingCache.set(key,Object.freeze(weights));
  return weights;
 }
 function expectedIncome(s,p,t,turns=2) {
@@ -38,8 +45,8 @@ function expectedIncome(s,p,t,turns=2) {
  return weight;
 }
 function reserve(s,p) {
- const cfg=profile(p);if(cfg.skill<4)return cfg.reserve;
- const weights=landingWeights(s,p,cfg.skill===5?2:1);let risk=0,large=0,income=0;
+ const cfg=profile(p);if(cfg.skill<3)return cfg.reserve;
+ const weights=landingWeights(s,p,cfg.lookahead);let risk=0,large=0,income=0;
  for(let i=0;i<s.tiles.length;i++){
   const t=s.tiles[i];
   if(t.owner&&t.owner!==p.id){const cost=rent(s,t);risk+=cost*weights[i];if(weights[i]>.08)large=Math.max(large,cost);}
@@ -48,11 +55,11 @@ function reserve(s,p) {
  }
  const open=s.tiles.filter(t=>t.price>0&&!t.owner).length;
  const base=cfg.reserve*(open>=12?.55:.85);
- return Math.ceil(Math.max(70,base+risk*(cfg.skill===5?2:1.6)+large*.12-Math.min(base*.25,income*.2)));
+ return Math.ceil(Math.max(70,base+risk*(cfg.skill===5?2:cfg.skill===4?1.6:1.2)+large*.12-Math.min(base*.25,income*.2)));
 }
 function value(s,p,t,selling=false) {
  const cfg=profile(p);let worth=t.price||0;
- if(cfg.skill<3)return Math.ceil(worth*(selling?1.4:cfg.bid));
+ if(cfg.skill<2)return Math.ceil(worth*(selling?1.4:cfg.bid));
  const g=group(s,t), owned=g.filter(x=>x.owner===p.id).length;
  if(g.length){
   const completes=owned+(t.owner===p.id?0:1)===g.length;
@@ -78,7 +85,7 @@ function investmentReserve(s,p,t) {
 function jailDecision(s,p) {
  const card=(p.jailCards||[]).length>0;
  if(!p.jail)return 'roll';
- if(profile(p).skill<4)return card?'usejail':'roll';
+ if(profile(p).skill<3)return card?'usejail':'roll';
  const fee=card?0:50;
  if(p.money<fee)return card?'usejail':'roll';
  if((p.jailTurns||0)>=2)return card?'usejail':'roll';
@@ -98,7 +105,7 @@ function jailDecision(s,p) {
  const completionWorthwhile=completion>0&&danger<Math.max(100,completion*2);
  const expanding=open>=5&&reachable>0&&canInvest&&danger<Math.max(40,opportunity*2);
  const profitable=opportunity>fee+danger;
- return completionWorthwhile||expanding||profitable?(card?'usejail':'payjail'):'roll';
+ return completionWorthwhile||(profile(p).skill>=4&&(expanding||profitable))?(card?'usejail':'payjail'):'roll';
 }
 function bidLimit(s,p,t) {return Math.max(0,Math.min(Math.floor(p.money-investmentReserve(s,p,t)),value(s,p,t)));}
 function shouldBuy(s,p,t,rng=Math.random) {
@@ -112,7 +119,7 @@ function buildIndex(s,p) {
   const delta=(t.rents?.[t.level+1]||0)-(t.rents?.[t.level]||t.rent||0);
   return delta/Math.max(1,t.build);
  }
- if(profile(p).skill>=3)candidates.sort((a,b)=>score(b.t)-score(a.t));
+ if(profile(p).skill>=2)candidates.sort((a,b)=>score(b.t)-score(a.t));
  return candidates[0]?.i??-1;
 }
 function unmortgageIndex(s,p) {
@@ -124,11 +131,11 @@ function unmortgageIndex(s,p) {
 function redemptionCost(t){const half=Math.floor(t.price/2);return half+Math.ceil(half/10);}
 function constructionScore(s,p,t) {
  const before=rent(s,t), after=t.rents?.[t.level+1]||before;
- return (after-before)*expectedIncome(s,p,t,profile(p).skill===5?2:1)/Math.max(1,t.build);
+ return (after-before)*expectedIncome(s,p,t,Math.max(1,profile(p).lookahead))/Math.max(1,t.build);
 }
 function redemptionScore(s,p,t) {
  const active={...t,mortgaged:false};
- return rent(s,active)*expectedIncome(s,p,t,profile(p).skill===5?2:1)/Math.max(1,redemptionCost(t));
+ return rent(s,active)*expectedIncome(s,p,t,Math.max(1,profile(p).lookahead))/Math.max(1,redemptionCost(t));
 }
 function investmentAction(s,p,allowBuild=true) {
  const build=allowBuild?buildIndex(s,p):-1, restore=unmortgageIndex(s,p);
@@ -194,11 +201,11 @@ function debtAction(s,p) {
 // A public-state projection of balanced building, including the cost of lifting
 // mortgages on a complete group. Curves are built once per ownership scenario;
 // checking many cash prices does not repeatedly simulate the same houses.
-function developmentCurve(s,p) {
+function developmentCurve(s,p,turns=3) {
  const tiles=s.tiles.map(t=>({...t})), projected={...s,tiles};
  const weights=new Array(tiles.length).fill(.1);
  for(const other of s.players.filter(x=>x.id!==p.id&&!x.out)){
-  const landings=landingWeights(s,other,3);
+  const landings=landingWeights(s,other,turns);
   landings.forEach((v,i)=>weights[i]+=v);
  }
  const complete=tiles.filter(t=>t.kind==='property'&&t.owner===p.id&&group(projected,t).every(x=>x.owner===p.id));
@@ -237,11 +244,13 @@ function projectedStrength(curve,budget) {
 function tradeModel(s,p,o) {
  const selling=p.id===o.seller,rival=s.players.find(x=>x.id===(selling?o.buyer:o.seller));
  const {fair,after}=tradeValues(s,p,o),cfg=profile(p);
- const ownBefore=developmentCurve(s,p),ownAfter=developmentCurve(after,p);
- const rivalBefore=developmentCurve(s,rival),rivalAfter=developmentCurve(after,rival);
- const ownReserve=reserve(after,p),rivalReserve=reserve(after,rival);
+ // Use the evaluator's horizon for both portfolios; other bots receive no preference.
+ const turns=cfg.lookahead,rivalView={...rival,botLevel:p.botLevel};
+ const ownBefore=developmentCurve(s,p,turns),ownAfter=developmentCurve(after,p,turns);
+ const rivalBefore=developmentCurve(s,rival,turns),rivalAfter=developmentCurve(after,rival,turns);
+ const ownReserve=reserve(after,p),rivalReserve=reserve(after,rivalView);
  const ownBase=projectedStrength(ownBefore,Math.max(0,p.money-reserve(s,p)));
- const rivalBase=projectedStrength(rivalBefore,Math.max(0,rival.money+collateral(s,rival)-reserve(s,rival)));
+ const rivalBase=projectedStrength(rivalBefore,Math.max(0,rival.money+collateral(s,rival)-reserve(s,rivalView)));
  const financing=collateral(after,rival);
  const newGroups=after.tiles.filter(t=>t.kind==='property'&&t.owner===rival.id&&
   group(after,t).every(x=>x.owner===rival.id)&&!group(s,s.tiles[after.tiles.indexOf(t)]).every(x=>x.owner===rival.id));
@@ -329,4 +338,4 @@ function tradeDecision(s,p,o) {
  const amount=selling?fair:Math.min(fair,Math.max(0,p.money-reserve(s,p)));
  return amount>0?{type:'counteroffer',amount:Math.floor(amount)}:{type:'rejectoffer'};
 }
-module.exports={protectsHumanAssets,LEVELS,normalize,profile,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision,jailDecision,investmentReserve,landingWeights,investmentAction,offerPlan,tradeValues};
+module.exports={protectsHumanAssets,LEVELS,normalize,profile,soloOpponents,reserve,value,bidLimit,shouldBuy,buildIndex,unmortgageIndex,debtAction,tradeDecision,jailDecision,investmentReserve,landingWeights,investmentAction,offerPlan,tradeValues};

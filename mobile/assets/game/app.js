@@ -1,4 +1,6 @@
 const BOT_LEVELS=[['beginner','Débutant'],['easy','Facile'],['normal','Normal'],['hard','Difficile'],['expert','Expert'],['ultimate','Ultime']];
+const SOLO_OPPONENTS={beginner:1,easy:1,normal:1,hard:2,expert:3,ultimate:4};
+const BOT_DESCRIPTIONS={beginner:'Achats simples et premières constructions.',easy:'Achats réguliers et budget prudent.',normal:'Groupes de villes et constructions rentables.',hard:'Anticipation des loyers et protection des groupes.',expert:'Investissements comparés et négociations stratégiques.',ultimate:'Anticipation approfondie des risques et du développement adverse.'};
 let pendingBotLevel='normal';
 const $=s=>document.querySelector(s),colors=['#d9483b','#4383bc','#bd8b32','#986ab6','#408558','#bc617b'];
 let session=null;try{session=JSON.parse((sessionStorage.getItem('quartiers')||localStorage.getItem('quartiers'))||'null')}catch{sessionStorage.removeItem('quartiers')}
@@ -180,7 +182,8 @@ function render(){
  if(s.phase==='opening'){$('#turn').textContent=current.name+' · tirage de l’ordre';if(!animating)announce('Tirage de l’ordre · '+(current.id===s.me?'à vous de lancer les dés !':current.name+' va lancer les dés.'),current.id);return}
  if(!animating)announce(s.phase==='lobby'?'Le salon est prêt. Invitez vos amis ou ajoutez un robot.':s.phase==='finished'?'🏆 '+current.name+' remporte la partie !':current.id===s.me?(s.rolled?'À vous : achetez, construisez ou terminez votre tour.':'À vous de lancer les dés !'):current.bot?'🤖 '+current.name+' prépare son prochain coup…':current.name+' joue.',current.id);
 }
-$('#bot-level').onchange=()=>{const ultimate=$('#bot-level').value==='ultimate';$('#solo').textContent=ultimate?'Affronter deux robots Ultime →':'Jouer contre le robot →';$('.bot-help').textContent=ultimate?'Toi contre deux robots indépendants : chacun joue pour lui.':'Même argent, mêmes règles et mêmes dés pour tous.'};
+function updateSoloLevel(){const level=$('#bot-level').value,n=SOLO_OPPONENTS[level],name=BOT_LEVELS.find(l=>l[0]===level)[1];$('#solo').textContent=n>1?'Affronter '+n+' robots '+name+' →':'Jouer contre le robot →';$('.bot-help').textContent=name+' · '+n+' robot'+(n>1?'s':'')+' · '+BOT_DESCRIPTIONS[level]+(n>1?' Chacun joue pour lui.':'');}
+$('#bot-level').onchange=updateSoloLevel;updateSoloLevel();
 $('#solo').onclick=()=>enter(true,'solo');$('#create').onclick=()=>enter(true);$('#entry').onsubmit=e=>{e.preventDefault();enter(false)};$('#code').value=new URLSearchParams(location.search).get('room')||'';
 const resumeButton=document.createElement('button');resumeButton.type='button';resumeButton.textContent='Reprendre ma partie';resumeButton.hidden=!session||!window.QuartiersAuth?.allowed;$('#entry').prepend(resumeButton);
 resumeButton.onclick=()=>{suspended=false;localStorage.removeItem('quartiers-paused');poll(true)};

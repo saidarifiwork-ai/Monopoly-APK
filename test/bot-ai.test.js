@@ -7,7 +7,7 @@ test('six valid levels; unknown levels rejected and old robots default to Normal
 test('beginner can miss an affordable purchase; higher levels purchase deliberately',()=>{const {p,s}=fixture('beginner');assert.equal(ai.shouldBuy(s,p,s.tiles[1],()=>.9),false);p.botLevel='ultimate';assert.equal(ai.shouldBuy(s,p,s.tiles[1],()=>.9),true);});
 test('advanced robots value group completion and blocking opponents',()=>{const {p,other,s}=fixture();const base=ai.value(s,p,s.tiles[1]);s.tiles[3].owner=p.id;assert(ai.value(s,p,s.tiles[1])>base);s.tiles[3].owner=other.id;assert(ai.value(s,p,s.tiles[1])>base);});
 test('Ultimate reserves extra cash for likely opposing rents and bids within its budget',()=>{const {p,other,s}=fixture();p.pos=0;p.money=500;const safe=ai.reserve(s,p);s.tiles[6].owner=other.id;s.tiles[6].level=4;assert(ai.reserve(s,p)>safe);for(const {id} of ai.LEVELS){p.botLevel=id;const limit=ai.bidLimit(s,p,s.tiles[1]);assert(limit>=0&&limit<=p.money);} });
-test('building respects ownership, mortgages, balance and funds; beginners do not build',()=>{const {p,s}=fixture();for(const i of [1,3])s.tiles[i].owner=p.id;assert([1,3].includes(ai.buildIndex(s,p)));s.tiles[1].level=1;assert.equal(ai.buildIndex(s,p),3);s.tiles[1].mortgaged=true;assert.equal(ai.buildIndex(s,p),-1);s.tiles[1].mortgaged=false;p.money=0;assert.equal(ai.buildIndex(s,p),-1);p.money=1500;p.botLevel='beginner';assert.equal(ai.buildIndex(s,p),-1);});
+test('building respects ownership, mortgages, balance and funds at every level',()=>{const {p,s}=fixture();for(const i of [1,3])s.tiles[i].owner=p.id;assert([1,3].includes(ai.buildIndex(s,p)));s.tiles[1].level=1;assert.equal(ai.buildIndex(s,p),3);s.tiles[1].mortgaged=true;assert.equal(ai.buildIndex(s,p),-1);s.tiles[1].mortgaged=false;p.money=0;assert.equal(ai.buildIndex(s,p),-1);p.money=1500;p.botLevel='beginner';assert.equal(ai.buildIndex(s,p),3);});
 test('debt strategy avoids illegal mortgages of groups with houses and preserves income',()=>{const {p,s}=fixture();s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;s.tiles[1].level=1;assert.deepEqual(ai.debtAction(s,p),{type:'sellhouse',index:1});s.tiles[5].owner=p.id;s.tiles[1].level=3;s.tiles[3].level=3;s.players[1].pos=35;s.debts=[{player:p.id,amount:p.money+100}];assert.deepEqual(ai.debtAction(s,p),{type:'mortgage',index:5});});
 test('trade decisions distinguish buying from selling and refuse unaffordable deals',()=>{const {p,other,s}=fixture();s.tiles[1].owner=other.id;p.money=1;assert.equal(ai.tradeDecision(s,p,{index:1,buyer:p.id,seller:other.id,amount:60,offered:[]}).type,'rejectoffer');s.tiles[1].owner=p.id;s.tiles[3].owner=p.id;assert.equal(ai.tradeDecision(s,p,{index:1,buyer:other.id,seller:p.id,amount:10,offered:[]}).type,'rejectoffer');});
 test('host assigns each robot separately, rejects bad levels, and replay preserves levels',()=>{const {e,p,s}=fixture();s.phase='lobby';e.invokeGameAction(s,p,{type:'addbot',botLevel:'ultimate'});e.invokeGameAction(s,p,{type:'addbot',botLevel:'beginner'});assert.equal(s.players[2].botLevel,'ultimate');assert.equal(s.players[3].botLevel,'beginner');assert.throws(()=>e.invokeGameAction(s,p,{type:'addbot',botLevel:'cheat'}));s.phase='finished';e.invokeGameAction(s,p,{type:'rematch'});assert.equal(s.players[2].botLevel,'ultimate');assert.equal(s.players[3].botLevel,'beginner');});
@@ -31,10 +31,10 @@ test('the bot uses the real payjail action and pays exactly 50 before moving',()
  const e=engine(()=>0),p=e.newPlayer('Robot'),other=e.newPlayer('Ami');p.id='a';other.id='b';p.bot=true;p.botLevel='ultimate';p.pos=10;p.jail=true;p.money=1000;
  const s={phase:'playing',turn:0,rolled:false,players:[p,other],tiles:e.newTiles(),debts:[],offer:null,log:[],events:[],eventSeq:0,dice:[3,4],host:p.id,botNext:0};s.tiles[18].owner=p.id;s.tiles[19].owner=p.id;e.invokeBotStep(s);assert(!p.jail);assert.equal(p.money,950);assert.equal(p.pos,12);assert.deepEqual(Array.from(s.dice),[1,1]);
 });
-test('two Ultimate opponents compete with each other and never pool their cash',()=>{
- const auction=require('../auction');const s={phase:'playing',turn:0,rolled:true,offer:null,debts:[],players:[{id:'human',pos:0,money:0},{id:'one',pos:0,money:1000,bot:true,botLevel:'ultimate'},{id:'two',pos:0,money:1000,bot:true,botLevel:'ultimate'}],tiles:[{name:'Test',price:200,kind:'property',group:0,owner:''}]};
+test('four Ultimate opponents compete with each other and never pool their cash',()=>{
+ const auction=require('../auction');const s={phase:'playing',turn:0,rolled:true,offer:null,debts:[],players:[{id:'human',pos:0,money:0},{id:'one',pos:0,money:1000,bot:true,botLevel:'ultimate'},{id:'two',pos:0,money:1000,bot:true,botLevel:'ultimate'},{id:'three',pos:0,money:1000,bot:true,botLevel:'ultimate'},{id:'four',pos:0,money:1000,bot:true,botLevel:'ultimate'}],tiles:[{name:'Test',price:200,kind:'property',group:0,owner:''}]};
  auction.start(s,s.players[0],0);const bidding=new Set();for(let n=1;s.auction&&n<300;n++){const who=s.auction.respondent,before=s.auction.amount;auction.tick(s,n*500);if(!s.auction||s.auction.amount>before)bidding.add(who);}
- assert(!s.auction);assert(bidding.has('one')&&bidding.has('two'));const winner=s.players.find(p=>p.id===s.tiles[0].owner);assert(winner&&winner.money<1000);const loser=s.players.find(p=>p.bot&&p!==winner);assert.equal(loser.money,1000);
+ assert(!s.auction);for(const bot of ['one','two','three','four'])assert(bidding.has(bot));const winner=s.players.find(p=>p.id===s.tiles[0].owner);assert(winner&&winner.money<1000);for(const loser of s.players.filter(p=>p.bot&&p!==winner))assert.equal(loser.money,1000);
  const {p,s:room,other}=fixture();room.tiles[3].owner=other.id;const againstHuman=ai.value(room,p,room.tiles[1]);other.bot=true;other.botLevel='ultimate';assert.equal(ai.value(room,p,room.tiles[1]),againstHuman);
 });
 
@@ -224,4 +224,37 @@ test('payment must not cheaply finance a rival building spree on an existing mon
  // Even a small purchase can fund the jump from two to three houses.
  const decision=ai.tradeDecision(s,p,{index:1,buyer:p.id,seller:other.id,amount:50,offered:[]});
  assert.notEqual(decision.type,'acceptoffer');
+});
+
+
+test('difficulty changes both group decisions and the planning horizon',()=>{
+ const {p,s}=fixture('easy');s.tiles[3].owner=p.id;
+ const easy=ai.value(s,p,s.tiles[1]);p.botLevel='normal';assert(ai.value(s,p,s.tiles[1])>easy);
+ const {p:hard,s:board,other}=fixture('hard');hard.pos=0;
+ const without=ai.reserve(board,hard);board.tiles[6].owner=other.id;board.tiles[6].level=4;
+ assert(ai.reserve(board,hard)>without,'Hard anticipates the next likely rent');
+ const far=fixture('hard');far.p.pos=0;const safe={};for(const level of ['hard','expert','ultimate']){far.p.botLevel=level;safe[level]=ai.reserve(far.s,far.p);}far.p.botLevel='hard';far.s.tiles[25].owner=far.other.id;far.s.tiles[25].kind='property';far.s.tiles[25].level=5;far.s.tiles[25].rents=[10,20,100,400,800,2000];
+ const hardCost=ai.reserve(far.s,far.p);assert.equal(hardCost,safe.hard);far.p.botLevel='expert';const expertCost=ai.reserve(far.s,far.p);assert.equal(expertCost,safe.expert);far.p.botLevel='ultimate';
+ assert(expertCost>hardCost);assert(ai.reserve(far.s,far.p)>safe.ultimate,'Ultimate considers a rent unreachable in the first two rolls');
+});
+test('cached public-position planning remains accurate when a player moves and never reads cards',()=>{
+ const {p,s}=fixture();s.chanceDeck=new Proxy([], {get(){throw Error('Private cards must not be inspected');}});
+ const first=ai.landingWeights(s,p,4);assert(Object.isFrozen(first));
+ assert(first[7]>first[2]);p.pos=20;
+ const second=ai.landingWeights(s,p,4);assert.notDeepEqual(first,second);p.pos=0;
+ assert.deepEqual(ai.landingWeights(s,p,4),first);
+ for(const level of ['hard','expert','ultimate']){p.botLevel=level;assert(Number.isFinite(ai.reserve(s,p)));}
+});
+test('a five-player advanced match progresses with individual balances and legal construction',()=>{
+ let random=45291;const e=engine(()=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return random/4294967296});
+ const players=Array.from({length:5},(_,i)=>({...e.newPlayer('Concurrent '+i),id:'p'+i,botLevel:'ultimate'}));
+ const s={phase:'lobby',host:'p0',players,tiles:e.newTiles(),log:[],events:[],eventSeq:0,debts:[],offer:null,turn:0};
+ e.invokeGameAction(s,players[0],{type:'start'});players.forEach(p=>p.bot=true);
+ for(let i=0;i<1500&&s.phase!=='finished';i++){
+  s.botNext=0;if(s.auction)s.auction.deadline=Date.now()+1000;
+  e.invokeBotStep(s);
+  assert(players.every(p=>Number.isFinite(p.money)&&p.money>=0));
+  for(const t of s.tiles){assert(t.level>=0&&t.level<=5);assert(!t.owner||players.some(p=>p.id===t.owner));}
+ }
+ assert(s.eventSeq>100);assert(s.tiles.filter(t=>t.owner).length>10);
 });

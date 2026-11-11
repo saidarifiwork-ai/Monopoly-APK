@@ -4,14 +4,14 @@ Le même moteur `bot-ai.js` est exécuté sur le serveur pour le web, Android et
 les joueurs PC présents dans le salon. Le client choisit le niveau, mais ne
 décide jamais des dés, du solde ni des actions autorisées.
 
-| Niveau | Identifiant API | Stratégie |
-| --- | --- | --- |
-| Débutant | `beginner` | Achats parfois manqués, enchères prudentes, pas de construction. |
-| Facile | `easy` | Achats plus fréquents, réserve simple, une construction par tour. |
-| Normal | `normal` | Achats et construction avec réserve fixe ; niveau des anciennes parties. |
-| Difficile | `hard` | Valorisation des groupes, choix des constructions selon leur rendement. |
-| Expert | `expert` | Blocage des groupes adverses et réserve adaptée aux loyers atteignables. |
-| Ultime | `ultimate` | Réserve plus protectrice, classement des constructions selon les positions adverses, jusqu’à cinq constructions légales par tour. |
+| Niveau | Identifiant API | Robots en solo | Stratégie |
+| --- | --- | --- | --- |
+| Débutant | `beginner` | 1 | Achats parfois manqués, enchères prudentes, une construction simple par tour. |
+| Facile | `easy` | 1 | Achats plus fréquents, réserve simple, une construction par tour. |
+| Normal | `normal` | 1 | Valorisation des groupes et choix des constructions selon leur rendement. |
+| Difficile | `hard` | 2 | Réserve adaptée au prochain déplacement, protection des groupes et sortie de prison pour compléter un groupe. |
+| Expert | `expert` | 3 | Risques sur deux déplacements, comparaison des investissements et négociations stratégiques. |
+| Ultime | `ultimate` | 4 | Risques et revenus sur quatre déplacements pondérés, développement adverse et jusqu’à cinq constructions légales par tour. |
 
 Expert et Ultime évaluent aussi la sortie de prison : ils privilégient une
 carte ou un paiement de 50 DH quand des achats utiles les attendent, en
@@ -30,14 +30,16 @@ Le paramètre optionnel `botLevel` est accepté par `/api/create` et l’action
 refusées. Le niveau est enregistré sur chaque robot et conservé lors d’un
 rejeu. Le bot temporaire d’un humain utilise Normal s’il n’a pas de niveau.
 
-En solo Ultime, la partie commence avec un humain et deux robots Ultime.
-Chaque robot défend ses propres intérêts : pas d’équipe, pas de partage de
-biens ou d’argent, et le second robot est un adversaire comme les humains.
-Les autres niveaux de solo conservent un seul robot.
+Le solo crée automatiquement un humain et le nombre de robots indiqué ci-dessus,
+au niveau sélectionné. Chaque robot défend ses propres intérêts : pas d’équipe,
+pas de partage de biens ou d’argent, et chaque autre robot est un adversaire comme
+les humains. Les salons privés gardent l’ajout manuel des robots (six joueurs
+au maximum). Les parties déjà commencées et les rejeux conservent leur effectif ;
+créer un nouveau solo applique la nouvelle répartition.
 
 Sur le web et Android : choix avant le solo, puis choix individuel du niveau
 du prochain robot dans le salon. Les changements du moteur nécessitent le
-déploiement du serveur ; l’accueil Android nécessite l’APK v1.0.13 ou ultérieur.
+déploiement du serveur ; les nouveaux nombres et descriptions de l’accueil Android nécessitent l’APK v1.0.20. Les anciens APK utilisent aussi la nouvelle répartition serveur pour les nouveaux solos.
 
 Validation : `node --test test/*.test.js`, `flutter analyze`, puis
 `flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8866` depuis `mobile/`.
@@ -47,8 +49,8 @@ Validation : `node --test test/*.test.js`, `flutter analyze`, puis
 Le moteur compare les décisions à partir de la situation courante :
 
 - Trésorerie : état du marché, loyers adverses atteignables, impôts connus et
-  revenus probables des biens déjà possédés. Ultime estime deux déplacements
-  futurs avec les probabilités normales des dés, sans consulter les cartes cachées.
+  revenus probables des biens déjà possédés. Expert estime deux déplacements et Ultime quatre déplacements
+  futurs, avec un poids décroissant avec les probabilités normales des dés, sans consulter les cartes cachées.
 - Investissements : comparaison du gain de loyer d’une construction avec celui
   d’une levée d’hypothèque. Une construction n’est plus retardée systématiquement
   par la levée d’hypothèque d’un bien peu rentable.
@@ -117,4 +119,23 @@ aucun taux de victoire et n’intervient pas sur les dés ou les cartes.
 
 La modification s’exécute sur le serveur commun : elle est compatible avec
 l’APK 1.0.14 actuel, sans nouveau téléchargement. L’API `/api/health` indique
-`botStrategy: 4` après le déploiement.
+`botStrategy: 5` après le déploiement.
+
+
+## Progression et coût de calcul
+
+Les niveaux représentent des stratégies programmées, pas un QI humain mesuré.
+Tous essaient d’acquérir des propriétés et peuvent construire avec un groupe
+complet ; les niveaux faibles prennent des décisions plus simples. À partir de
+Difficile, le budget tient compte des loyers probables. Expert et Ultime comparent
+les occasions d’investissement, les hypothèques et le développement de chacun.
+Les probabilités de déplacement sont mises en cache à partir de la position
+publique et de l’horizon seulement, dans un cache borné. Un déplacement modifie
+la clé ; aucun paquet de cartes n’entre dans ce cache. Cette économie de calcul
+permet d’augmenter l’effectif sans recalculer les mêmes probabilités pour chaque
+prix envisagé dans une négociation.
+
+Les tests couvrent les six effectifs via la vraie API, la conservation au rejeu,
+les enchères entre quatre robots indépendants, les différences de décision selon
+le niveau et une simulation légale à cinq joueurs. Le web et le choix des niveaux
+sur téléphone sont vérifiés dans Chromium et les tests Flutter.

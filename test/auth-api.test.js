@@ -88,8 +88,27 @@ test('solo games, waiting lobbies and temporary robot takeovers can be resumed; 
  const s=engine.getRoom(solo.code),p=s.players[0];p.bot=true;p.temporaryBot=true;p.autoPlay=true;
  const resumed=(await call('/api/resume',{code:solo.code},web)).body;
  assert.equal(p.bot,false);assert.equal(p.temporaryBot,undefined);assert.equal(p.autoPlay,undefined);
- assert.equal(s.players.filter(x=>x.bot).length,2);assert.equal((await state(resumed,web)).status,200);
+ assert.equal(s.players.filter(x=>x.bot).length,4);assert.equal((await state(resumed,web)).status,200);
  s.phase='finished';assert(!(await call('/api/my-games',null,web)).body.games.some(g=>g.code===solo.code));
  assert.equal((await call('/api/resume',{code:solo.code},android)).status,400);
  for(const route of ['/api/my-games','/api/resume'])assert.equal((await call(route,route.endsWith('resume')?{code:lobby.code}:null)).status,401);
+});
+
+
+test('solo creates the requested independent opponents at every difficulty and replay preserves them',async t=>{
+ const {call,login,state,engine}=await gameServer(t),account=await login('said');
+ const expected={beginner:1,easy:1,normal:1,hard:2,expert:3,ultimate:4};
+ for(const [botLevel,count] of Object.entries(expected)){
+  const response=await call('/api/create',{mode:'solo',botLevel,name:'Said'},account);assert.equal(response.status,200);
+  const seat=response.body,s=(await state(seat,account)).body;
+  assert.equal(s.players.length,count+1);assert.equal(s.players.filter(p=>p.bot).length,count);
+  assert(s.players.filter(p=>p.bot).every(p=>p.botLevel===botLevel&&p.money===1500));
+  assert.equal(new Set(s.players.map(p=>p.id)).size,count+1);
+  assert.equal(s.phase,'opening');
+  const room=engine.getRoom(seat.code);room.phase='finished';engine.invokeGameAction(room,room.players[0],{type:'rematch'});
+  const replay=(await state(seat,account)).body;
+  assert.equal(replay.players.length,count+1);assert(replay.players.filter(p=>p.bot).every(p=>p.botLevel===botLevel));
+ }
+ const privateRoom=(await call('/api/create',{botLevel:'ultimate'},account)).body;
+ assert.equal((await state(privateRoom,account)).body.players.length,1,'private lobbies stay manual');
 });

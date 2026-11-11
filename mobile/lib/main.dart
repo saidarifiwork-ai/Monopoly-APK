@@ -176,6 +176,32 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   bool gameOpened = false;
   bool settingsOpen = false;
   String botLevel = 'normal';
+  static const soloOpponents = {
+    'beginner': 1,
+    'easy': 1,
+    'normal': 1,
+    'hard': 2,
+    'expert': 3,
+    'ultimate': 4
+  };
+  static const botNames = {
+    'beginner': 'Débutant',
+    'easy': 'Facile',
+    'normal': 'Normal',
+    'hard': 'Difficile',
+    'expert': 'Expert',
+    'ultimate': 'Ultime'
+  };
+  static const botDescriptions = {
+    'beginner': 'Achats simples et premières constructions.',
+    'easy': 'Achats réguliers et budget prudent.',
+    'normal': 'Groupes de villes et constructions rentables.',
+    'hard': 'Anticipation des loyers et protection des groupes.',
+    'expert': 'Investissements comparés et négociations stratégiques.',
+    'ultimate':
+        'Anticipation approfondie des risques et du développement adverse.'
+  };
+
   @override
   void initState() {
     super.initState();
@@ -682,20 +708,19 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
                                   : (value) => setState(
                                       () => botLevel = value ?? 'normal'),
                             ),
-                            if (botLevel == 'ultimate')
-                              const Padding(
-                                padding: EdgeInsets.only(top: 8),
-                                child: Text(
-                                    'Toi contre deux robots indépendants : chacun joue pour lui.',
-                                    style: TextStyle(color: ink)),
-                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                  '${soloOpponents[botLevel]} robot${soloOpponents[botLevel]! > 1 ? 's' : ''} · ${botDescriptions[botLevel]}${soloOpponents[botLevel]! > 1 ? ' Chacun joue pour lui.' : ''}',
+                                  style: const TextStyle(color: ink)),
+                            ),
                             const SizedBox(height: 12),
                             FilledButton.icon(
                               onPressed:
                                   c.busy ? null : () => enter(solo: true),
                               icon: const Icon(Icons.smart_toy_outlined),
-                              label: Text(botLevel == 'ultimate'
-                                  ? 'Affronter deux robots Ultime'
+                              label: Text(soloOpponents[botLevel]! > 1
+                                  ? 'Affronter ${soloOpponents[botLevel]} robots ${botNames[botLevel]}'
                                   : 'Jouer contre le robot'),
                             ),
                             const SizedBox(height: 12),

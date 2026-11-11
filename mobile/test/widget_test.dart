@@ -88,8 +88,34 @@ void main() {
     await tester.tap(find.text('Ultime').last);
     await tester.pumpAndSettle();
     expect(find.text('Ultime'), findsOneWidget);
+    expect(find.text('Affronter 4 robots Ultime'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  for (final entry in {'Difficile': 2, 'Expert': 3, 'Ultime': 4}.entries) {
+    testWidgets(
+        'solo button announces ${entry.value} opponents for ${entry.key}',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({'server': ''});
+      final controller = GameController(await SharedPreferences.getInstance());
+      await tester.pumpWidget(QuartiersApp(
+          controller: controller, accountController: SignedInTestAccount()));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Normal'));
+      await tester.tap(find.text('Normal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(entry.key).last);
+      await tester.pumpAndSettle();
+      final button = find.text('Affronter ${entry.value} robots ${entry.key}');
+      await tester.ensureVisible(button);
+      expect(button, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
   testWidgets('phone welcome validates name and fits with large text', (
     tester,
   ) async {

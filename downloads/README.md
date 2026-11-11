@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.19 — connexion Google
+# Quartiers Maroc pour Android — version 1.0.20 — connexion Google
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.19.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.20.apk)
 
 Cette version exige la connexion Google et remplace les anciens APK lors du
 déploiement du serveur avec authentification. Les clients Google Web et Android
@@ -19,7 +19,7 @@ un autre appareil sans ressaisir le code du salon : « Reprendre ma partie » af
 
 Le nouvel accueil utilise l’image fournie comme fond sur le web et dans l’APK, avec un panneau de commandes lisible.
 
-Expert et Ultime adaptent leurs sorties de prison et leur réserve aux occasions d’achat. En solo Ultime : deux robots indépendants, chacun pour soi.
+Expert et Ultime adaptent leurs sorties de prison et leur réserve aux occasions d’achat. Nouveaux solos : 4 robots en Ultime, 3 en Expert, 2 en Difficile et 1 dans les autres niveaux. Chacun joue pour soi. Difficile anticipe les loyers proches, Expert deux déplacements et Ultime quatre déplacements pondérés. Normal valorise mieux les groupes ; Débutant peut aussi construire. Les parties en cours conservent leurs joueurs.
 
 Six niveaux de robot : Débutant, Facile, Normal, Difficile, Expert et Ultime. Choix avant le solo et niveau individuel par robot dans le salon. Le serveur doit être mis à jour pour appliquer les nouvelles stratégies.
 

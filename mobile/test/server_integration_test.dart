@@ -102,7 +102,7 @@ void main() {
         data: {'name': 'Test robot', 'mode': 'solo', 'botLevel': 'ultimate'});
     s = await state(solo);
     expect(s.phase, 'opening');
-    expect(s.players.where((p) => p['bot'] == true).length, 2);
+    expect(s.players.where((p) => p['bot'] == true).length, 4);
     expect(
         s.players
             .where((p) => p['bot'] == true)
@@ -112,7 +112,7 @@ void main() {
         s.players.firstWhere((p) => p['bot'] == true)['botLevel'], 'ultimate');
     final bots =
         s.players.where((p) => p['bot'] == true).map((p) => p['id']).toSet();
-    final deadline = DateTime.now().add(const Duration(seconds: 35));
+    final deadline = DateTime.now().add(const Duration(seconds: 55));
     while (DateTime.now().isBefore(deadline)) {
       s = await state(solo);
       if (s.events
@@ -137,7 +137,7 @@ void main() {
         isTrue,
         reason: 'The robot must actually take a turn, not just join the room.');
   },
-      timeout: const Timeout(Duration(seconds: 60)),
+      timeout: const Timeout(Duration(seconds: 80)),
       skip: address.isEmpty
           ? 'Run with --dart-define=SMOKE_SERVER=http://127.0.0.1:8787'
           : false);

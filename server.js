@@ -1215,7 +1215,7 @@ async function claimAccountSeat(s, p) {
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 22, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 23, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 90, sessionMaxDays: 365, sessionRenewal: true, durableLogin: !!database, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 5, ultimateSoloOpponents: 4, botLevels: botAI.LEVELS.map(({id,name,opponents,lookahead})=>({id,name,soloOpponents:opponents,lookahead}))});
 });
 
 app.get('/api/my-games', (req, res) => {
@@ -1283,7 +1283,7 @@ app.post('/api/create', async (req, res) => {
         rooms.set(code, s);
         
         if (req.body.mode === 'solo') {
-            const count = botLevel === 'ultimate' ? 2 : 1;
+            const count = botAI.soloOpponents(botLevel);
             for (let i = 0; i < count; i++) invokeGameAction(s, p, {type: 'addbot'});
             invokeGameAction(s, p, {type: 'start'});
         }
