@@ -31,6 +31,14 @@ if (window.QuartiersAuth.allowed) {
     }
     window.dispatchEvent(new CustomEvent('quartiers-account', {detail: account}));
   }
+  function retryWhenVisible() {
+    if (auth.pending && !document.hidden && navigator.onLine && !running) auth.ready = setup();
+  }
+  function scheduleRetry() {
+    if (document.hidden || !navigator.onLine) return;
+    const delay = Math.min(5000 * 2 ** Math.min(retries++, 4), 60000);
+    retryTimer = setTimeout(retryWhenVisible, delay);
+  }
   async function setup() {
     if (running) return;
     running = true;clearTimeout(retryTimer);auth.pending = true;
@@ -65,12 +73,14 @@ if (window.QuartiersAuth.allowed) {
       auth.pending = true;
       message.textContent = 'Connexion temporairement indisponible. Votre compte enregistré est conservé. Réessayez dans un instant.';
       document.querySelector('#google-retry').hidden = false;
-      if (retries++ < 2) retryTimer = setTimeout(() => {auth.ready = setup();}, 5000);
+      scheduleRetry();
     } finally {running = false;}
   }
   auth.expire = () => {update(null);auth.ready = setup();};
   document.querySelector('#google-retry').onclick = () => {retries = 0;auth.ready = setup();};
-  window.addEventListener('online', () => {if (auth.pending) {retries = 0;auth.ready = setup();}});
+  window.addEventListener('online', () => {if (auth.pending) {retries = 0;retryWhenVisible();}});
+  window.addEventListener('focus', retryWhenVisible);
+  document.addEventListener('visibilitychange', retryWhenVisible);
   document.querySelector('#google-logout').onclick = async () => {
     try {
       clearTimeout(retryTimer);

@@ -1,6 +1,6 @@
-# Quartiers Maroc pour Android — version 1.0.18 — connexion Google
+# Quartiers Maroc pour Android — version 1.0.19 — connexion Google
 
-[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.18.apk)
+[**Télécharger l’APK mis à jour**](https://github.com/saidarifiwork-ai/Monopoly-APK/raw/refs/heads/flutter-android-download/downloads/quartiers-maroc-android-arm64-v1.0.19.apk)
 
 Cette version exige la connexion Google et remplace les anciens APK lors du
 déploiement du serveur avec authentification. Les clients Google Web et Android
@@ -10,7 +10,7 @@ restent à effectuer après le déploiement.
 
 Un même logo avec le personnage à moustache est utilisé pour le site, le favori du navigateur et l’APK. Les cartes Chance et Caisse commune sont mélangées avant le tirage de l’ordre et à chaque rejeu ; les anciens paquets sauvegardés sans version sont remélangés une seule fois, sans reprendre les cartes de sortie de prison détenues.
 
-La connexion enregistrée est reprise à l’ouverture. Une erreur réseau conserve la session et déclenche une nouvelle tentative. Android peut renouveler discrètement une session Google expirée lorsque le SDK le permet ; le web restaure d’abord son cookie. Les sessions serveur sont enregistrées sur disque, avec une durée maximale de 30 jours. Sur Render gratuit, la conservation des fichiers après mise en veille ou déploiement reste limitée : voir [le fonctionnement](../docs/CONNEXION-GOOGLE.md#conserver-la-connexion).
+La connexion enregistrée est reprise à l’ouverture. Une erreur réseau conserve la session ; les nouvelles tentatives continuent automatiquement avec un délai progressif jusqu’à 60 secondes, et reprennent au retour dans l’application. Android peut renouveler discrètement une session Google expirée lorsque le SDK le permet ; le web restaure d’abord son cookie. Les connexions ont une validité de 90 jours d’inactivité, prolongée automatiquement pendant l’utilisation du jeu, avec une limite totale d’un an. Ce renouvellement conserve le même cookie web ou jeton Android et ne demande pas Google. La conservation après remplacement du serveur exige PostgreSQL configuré sur Render. Sur Render gratuit, la conservation des fichiers après mise en veille ou déploiement reste limitée : voir [le fonctionnement](../docs/CONNEXION-GOOGLE.md#conserver-la-connexion).
 
 Le compte de jeu est créé après la connexion Google ; le nom et la photo du
 profil sont utilisés sur le web et Android. La connexion est obligatoire pour

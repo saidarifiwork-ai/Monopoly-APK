@@ -97,7 +97,10 @@ est prérempli mais reste modifiable. La photo vient exclusivement du profil Goo
 Le cookie web est `HttpOnly`, `SameSite=Lax` et `Secure` en production. Android
 stocke son jeton de session dans le stockage sécurisé du téléphone et l'envoie
 uniquement dans les requêtes natives ; il n'est pas exposé au JavaScript du jeu.
-Une session dure au maximum trente jours. Les empreintes des jetons sont
+La connexion reste valide pendant 90 jours d’inactivité. Une utilisation
+authentifiée la prolonge automatiquement, au plus une fois par jour, avec une
+limite totale d’un an après la dernière connexion Google. Le cookie et le jeton
+Android restent identiques pendant ce renouvellement. Les empreintes des jetons sont
 sauvegardées dans `SESSIONS_FILE` (par défaut `ACCOUNTS_FILE + '.sessions'`),
 avec l’expiration, le profil et le client Google d’origine. Le fichier ne contient
 pas les jetons utilisables par un navigateur ou un téléphone. Si le fichier est
@@ -152,8 +155,10 @@ Les limites de fichiers temporaires ci-dessous concernent le mode sans base.
 
 Fermer le navigateur ou l’APK ne déconnecte pas volontairement le compte.
 L’APK conserve son jeton et les métadonnées du compte dans le stockage sécurisé.
-Une erreur réseau au démarrage ne les supprime pas. Deux nouvelles tentatives
-sont prévues après un court délai ; « Réessayer ma connexion » reste disponible.
+Une erreur réseau au démarrage ne les supprime pas. Les nouvelles tentatives
+sont automatiques, avec un délai de 5, 10, 20, 40 puis 60 secondes au maximum,
+tant que l’accueil reste actif. Elles sont suspendues en arrière-plan et reprises
+au retour. « Réessayer ma connexion » reste disponible.
 Si le serveur refuse un ancien jeton, Android tente une authentification Google
 légère, sans ouvrir le sélecteur de comptes. Le compte vérifié doit correspondre
 au compte mémorisé ; le renouvellement silencieux n’accepte pas un autre compte.
@@ -213,3 +218,24 @@ entre comptes et les commandes de l’ancien appareil. Le navigateur vérifie le
 boutons et l’affichage desktop/téléphone avec un fournisseur Google simulé ; les
 tests Flutter incluent un serveur Node réel local. Aucun essai sur téléphone
 physique n’est revendiqué.
+
+
+## Renouvellement des connexions mémorisées
+
+Une requête authentifiée prolonge une session encore valide jusqu’à 90 jours,
+sans vérifier à nouveau un jeton Google et sans ouvrir son sélecteur de comptes.
+Le renouvellement intervient au plus une fois par jour et ne dépasse jamais un an
+après l’authentification Google initiale. Le navigateur reçoit à nouveau son
+cookie persistant ; Android conserve le même jeton dans son stockage sécurisé.
+Une session déjà expirée ou déconnectée n’est jamais réactivée par cette opération.
+Les sessions de l’ancienne version restent utilisables jusqu’à leur expiration
+et peuvent être prolongées avant cette date, sans changement de leurs identifiants.
+
+Le serveur attend la sauvegarde PostgreSQL du renouvellement avant de le
+confirmer. Une erreur de sauvegarde renvoie 503 et conserve la dernière session
+validée. La révocation et la limite annuelle restent actives après redémarrage.
+Les tests simulent plusieurs mois d’utilisation sans nouvel appel à Google,
+y compris après réouverture du stockage PostgreSQL. L’absence de base hébergée
+configurée reste un blocage : le renouvellement ne reconstitue pas un fichier
+éphémère effacé par Render. Contrôler `durableLogin: true` et
+`storage: "postgresql"` dans `/api/health` après activation de la base.

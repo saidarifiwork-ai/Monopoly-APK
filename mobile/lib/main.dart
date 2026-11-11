@@ -200,8 +200,13 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
       c.setAuthToken(a.token);
       if (a.account != null) c.pause(false);
       await c.restore(restoreSession: a.account != null);
-      if (a.restorePending && restoreRetries++ < 2) {
-        accountRetry = Timer(const Duration(seconds: 5), () {
+      if (a.restorePending &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed)) {
+        final attempt = restoreRetries < 4 ? restoreRetries++ : 4;
+        final delay = [5, 10, 20, 40, 60][attempt];
+        accountRetry = Timer(Duration(seconds: delay), () {
           if (mounted) unawaited(restoreAccount());
         });
       } else if (a.account != null) {
@@ -269,7 +274,11 @@ class _GameHomeState extends State<GameHome> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     c.pause(c.state != null || state != AppLifecycleState.resumed);
-    if (state == AppLifecycleState.resumed && a.account != null) {
+    if (state != AppLifecycleState.resumed) {
+      accountRetry?.cancel();
+    } else if (a.restorePending) {
+      unawaited(restoreAccount());
+    } else if (a.account != null) {
       unawaited(c.discoverGames());
     }
   }

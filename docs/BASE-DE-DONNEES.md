@@ -1,8 +1,8 @@
 # Conserver les comptes Google, les connexions et les parties
 
 Le serveur utilise PostgreSQL dès que `DATABASE_URL` est renseignée. Le web et
-l’APK 1.0.18 utilisent déjà les mêmes API : cette modification serveur ne nécessite
-pas une nouvelle installation Android. La base hébergée doit être créée dans le
+les APK 1.0.18 et 1.0.19 utilisent les mêmes API : le stockage et le renouvellement fonctionnent côté serveur. L’APK 1.0.19 améliore
+aussi les nouvelles tentatives automatiques lorsque Render tarde à démarrer. La base hébergée doit être créée dans le
 compte du propriétaire ; ce dépôt ne provisionne aucun abonnement ni ressource
 chez un fournisseur.
 
@@ -36,7 +36,7 @@ chez un fournisseur.
    `https://monopoly-bw6e.onrender.com/api/health`, vérifier :
 
    ```json
-   {"storage":"postgresql","authPersistence":"postgresql","storageReady":true}
+   {"storage":"postgresql","authPersistence":"postgresql","storageReady":true,"durableLogin":true}
    ```
 
    Si la réponse contient `"storage":"file"`, la base n’est pas encore branchée.
@@ -82,7 +82,10 @@ sur les anciens fichiers, même si ces fichiers sont périmés ou endommagés.
 Des fichiers déjà effacés par Render ne peuvent pas être reconstitués. Une première
 reconnexion Google peut donc être nécessaire au passage à PostgreSQL.
 
-Les connexions expirent toujours après trente jours. La déconnexion volontaire
+Les connexions ont une validité de 90 jours d’inactivité, prolongée
+automatiquement lors de l’utilisation du jeu, avec une limite totale d’un an.
+Le renouvellement conserve le même cookie web et le même jeton Android ; il ne
+demande pas une nouvelle connexion Google. La déconnexion volontaire
 reste effective après un redémarrage. La sauvegarde durable ne garantit pas une
 connexion sans interaction à vie : Google et les réglages du navigateur peuvent
 aussi imposer une nouvelle authentification.

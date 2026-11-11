@@ -69,7 +69,7 @@ test('web cookies and native bearers survive a server restart; only hashes are p
  const h=await harness(t),native=await h.login(),web=await h.login('web');
  const saved=fs.readFileSync(path.join(h.dir,'accounts.json.sessions'),'utf8');
  assert(!saved.includes(native.body.token));assert(saved.includes(native.body.account.id));
- assert(web.cookie.includes('Max-Age=2592000'));assert(web.cookie.includes('Expires='));
+ assert(web.cookie.includes('Max-Age=7776000'));assert(web.cookie.includes('Expires='));
  const headers={Authorization:'Bearer '+native.body.token},cookies={Cookie:web.cookie.split(';')[0]};
  await h.restart();
  assert.equal((await h.request('/api/auth/me',null,headers)).body.account.id,native.body.account.id);
@@ -79,9 +79,9 @@ test('web cookies and native bearers survive a server restart; only hashes are p
  assert.equal((await h.request('/api/auth/me',null,cookies)).status,200,'another device stays signed in');
 });
 
-test('persisted sessions expire after thirty days and are not revived by restarting',async t=>{
+test('inactive sessions expire after ninety days and are not revived by restarting',async t=>{
  let clock=Date.now();const h=await harness(t,{now:()=>clock}),login=await h.login();
- clock+=31*24*60*60*1000;await h.restart();
+ clock+=91*24*60*60*1000;await h.restart();
  assert.equal((await h.request('/api/auth/me',null,{Authorization:'Bearer '+login.body.token})).status,401);
 });
 
@@ -90,4 +90,72 @@ test('a saved session is bound to the Google client that originally verified it'
  const h=await harness(t),login=await h.login();
  await h.restart('other-client.apps.googleusercontent.com');
  assert.equal((await h.request('/api/auth/me',null,{Authorization:'Bearer '+login.body.token})).status,401);
+});
+
+const DAY = 24*60*60*1000;
+test('daily activity renews the same web cookie and native session without Google, including after restart', async t => {
+ let clock=Date.now();const start=clock,h=await harness(t,{now:()=>clock});
+ const native=await h.login(),web=await h.login('web');
+ const headers={Authorization:'Bearer '+native.body.token},cookies={Cookie:web.cookie.split(';')[0]};
+ for(const day of [1,25,50,75,100,125]) {
+  clock=start+day*DAY;
+  await h.restart();
+  const a=await h.request('/api/auth/me',null,headers),b=await h.request('/api/auth/me',null,cookies);
+  assert.equal(a.status,200);assert.equal(b.status,200);
+  assert(b.cookie.includes(web.cookie.split(';')[0]));assert(b.cookie.includes('Max-Age=7776000'));
+  assert.equal(b.body.account.id,native.body.account.id);
+ }
+ const saved=JSON.parse(fs.readFileSync(path.join(h.dir,'accounts.json.sessions'),'utf8'));
+ assert(saved.sessions.every(([,s])=>s.expires===clock+90*DAY&&s.absoluteExpires===start+365*DAY));
+ assert(!JSON.stringify(saved).includes(native.body.token));
+ assert.equal((await h.request('/api/auth/me',null,cookies)).cookie,null,'renew at most daily');
+ await h.request('/api/auth/logout',{},headers);await h.restart();
+ assert.equal((await h.request('/api/auth/me',null,headers)).status,401);
+ assert.equal((await h.request('/api/auth/me',null,cookies)).status,200);
+});
+test('renewable sessions retain an absolute one-year limit', async t => {
+ let clock=Date.now();const start=clock,h=await harness(t,{now:()=>clock}),login=await h.login('web');
+ const cookies={Cookie:login.cookie.split(';')[0]};
+ for(let day=30;day<=360;day+=30) {
+  clock=start+day*DAY;
+  const response=await h.request('/api/auth/me',null,cookies);assert.equal(response.status,200);
+  const expires=/Expires=([^;]+)/.exec(response.cookie)[1];
+  assert(Date.parse(expires)<=start+365*DAY);
+ }
+ clock=start+365*DAY;await h.restart();
+ assert.equal((await h.request('/api/auth/me',null,cookies)).status,401);
+});
+test('legacy thirty-day sessions are upgraded without replacing credentials or reviving expired sessions', async t => {
+ let clock=Date.now();const h=await harness(t,{now:()=>clock}),login=await h.login();
+ const file=path.join(h.dir,'accounts.json.sessions'),saved=JSON.parse(fs.readFileSync(file,'utf8'));
+ for(const [,s] of saved.sessions) {s.expires=clock+30*DAY;delete s.createdAt;delete s.renewedAt;delete s.absoluteExpires;}
+ fs.writeFileSync(file,JSON.stringify(saved));clock+=25*DAY;await h.restart();
+ const headers={Authorization:'Bearer '+login.body.token};
+ assert.equal((await h.request('/api/auth/me',null,headers)).status,200);
+ clock+=31*DAY;await h.restart();
+ assert.equal((await h.request('/api/auth/me',null,headers)).status,200);
+ clock+=91*DAY;await h.restart();
+ assert.equal((await h.request('/api/auth/me',null,headers)).status,401);
+});
+
+test('concurrent activity coalesces renewal and a failed renewal preserves the committed session', async t => {
+ let clock=Date.now(),writes=0,fail=false;
+ const saved={accounts:{},sessions:{version:1,sessions:[]}};
+ const store={auth:saved,save:async (_,value)=>{writes++;if(fail)throw Error('offline');Object.assign(saved,JSON.parse(JSON.stringify(value)));}};
+ const app=express();app.use(express.json());
+ createAuth({clientId:CLIENT,persistence:store,now:()=>clock,verifyIdToken:async()=>({getPayload:()=>({sub:'said',name:'Said',aud:CLIENT,iss:'https://accounts.google.com',exp:clock/1000+3600})})}).install(app);
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+ t.after(()=>{server.closeAllConnections();server.close();});
+ const base='http://127.0.0.1:'+server.address().port;
+ const config=await(await fetch(base+'/api/auth/config')).json();
+ const login=await(await fetch(base+'/api/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:'verified',nonce:config.nonce,platform:'android'})})).json();
+ const headers={Authorization:'Bearer '+login.token},before=saved.sessions.sessions[0][1].expires;
+ clock+=2*DAY;fail=true;
+ const unavailable=await fetch(base+'/api/auth/me',{headers});
+ assert.equal(unavailable.status,503);assert.equal(unavailable.headers.get('set-cookie'),null);
+ assert.equal(saved.sessions.sessions[0][1].expires,before);
+ fail=false;writes=0;
+ const results=await Promise.all(Array.from({length:8},()=>fetch(base+'/api/auth/me',{headers})));
+ assert(results.every(r=>r.status===200));assert.equal(writes,1);
+ assert.equal(saved.sessions.sessions[0][1].expires,clock+90*DAY);
 });

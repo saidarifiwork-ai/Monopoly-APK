@@ -171,3 +171,36 @@ test('a configured database failure refuses startup without silently creating lo
     assert.equal(code,1);assert(!output.includes('never-print-this-secret'));assert(!output.includes('http://localhost:'));
     assert.deepEqual(fs.readdirSync(dir),[]);
 });
+
+
+test('PostgreSQL renews remembered devices without Google and retains renewal after a fresh process store', {skip: !address}, async t => {
+ const db=await isolatedDatabase(t);let clock=Date.now(),verified=0,persistence,server;
+ const files={connectionString:db.url,accountsFile:'/tmp/nonexistent-quartiers-renewal-accounts',sessionsFile:'/tmp/nonexistent-quartiers-renewal-sessions',roomsFile:'/tmp/nonexistent-quartiers-renewal-rooms'};
+ async function boot(){
+  persistence=await openDatabase(files);
+  const app=express();app.use(express.json());
+  createAuth({clientId:'test.apps.googleusercontent.com',persistence,now:()=>clock,verifyIdToken:async credential=>{
+   verified++;const [identity,nonce]=credential.split(':');return {getPayload:()=>({sub:identity,name:identity,aud:'test.apps.googleusercontent.com',iss:'https://accounts.google.com',exp:clock/1000+3600,nonce})};
+  }}).install(app);
+  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+  return 'http://127.0.0.1:'+server.address().port;
+ }
+ async function stop(){server.closeAllConnections();await new Promise(r=>server.close(r));await persistence.close();}
+ let base=await boot();t.after(stop);
+ async function login(platform){
+  const config=await(await fetch(base+'/api/auth/config')).json();
+  const response=await fetch(base+'/api/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:'said:'+config.nonce,nonce:config.nonce,platform})});
+  return {body:await response.json(),cookie:response.headers.get('set-cookie')};
+ }
+ const native=await login('android'),web=await login('web');
+ const headers=[{Authorization:'Bearer '+native.body.token},{Cookie:web.cookie.split(';')[0]}];
+ clock+=60*24*60*60*1000;
+ for(const auth of headers)assert.equal((await fetch(base+'/api/auth/me',{headers:auth})).status,200);
+ await stop();base=await boot();clock+=40*24*60*60*1000;
+ for(const auth of headers)assert.equal((await fetch(base+'/api/auth/me',{headers:auth})).status,200);
+ assert.equal(verified,2,'restoration and renewal never ask Google to authenticate again');
+ assert.equal((await fetch(base+'/api/auth/logout',{method:'POST',headers:{...headers[0],'Content-Type':'application/json'},body:'{}'})).status,200);
+ await stop();base=await boot();
+ assert.equal((await fetch(base+'/api/auth/me',{headers:headers[0]})).status,401);
+ assert.equal((await fetch(base+'/api/auth/me',{headers:headers[1]})).status,200);
+});

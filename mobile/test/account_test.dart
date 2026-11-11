@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +10,85 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'account_fakes.dart';
 
 void main() {
+  testWidgets('a long server wake-up retries without requesting Google again',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'server': 'https://game.example'});
+    final store = MemoryAccountTokenStore();
+    final profile = {'id': 'said', 'name': 'Said', 'picture': ''};
+    final saved =
+        jsonEncode({'token': 'remembered-bearer', 'account': profile});
+    store.tokens['https://game.example'] = saved;
+    var attempts = 0;
+    final account = GoogleAccountController(
+        store: store,
+        login: (_) async => throw StateError('No interactive Google request'),
+        silentLogin: (_) async =>
+            throw StateError('No Google request for a server outage'),
+        apiFactory: (uri) => GameApi(uri, client: MockClient((request) async {
+              expect(
+                  request.headers['Authorization'], 'Bearer remembered-bearer');
+              return ++attempts < 5
+                  ? http.Response(
+                      '{"error":"Waking up","code":"STORAGE_UNAVAILABLE"}', 503)
+                  : http.Response(jsonEncode({'account': profile}), 200);
+            })));
+    final game = GameController(await SharedPreferences.getInstance(),
+        apiFactory: (uri) => GameApi(uri,
+            client:
+                MockClient((_) async => http.Response('{"games":[]}', 200))));
+    await tester
+        .pumpWidget(QuartiersApp(controller: game, accountController: account));
+    await tester.pumpAndSettle();
+    expect(account.restorePending, isTrue);
+    for (final seconds in [5, 10, 20, 40]) {
+      await tester.pump(Duration(seconds: seconds));
+      await tester.pumpAndSettle();
+    }
+    expect(attempts, 5);
+    expect(account.account, profile);
+    expect(account.restorePending, isFalse);
+    expect(await store.read('https://game.example'), saved);
+    expect(find.text('Jouer contre le robot'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+      'pending reconnection pauses in the background and resumes on return',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'server': 'https://game.example'});
+    final store = MemoryAccountTokenStore();
+    final profile = {'id': 'said', 'name': 'Said', 'picture': ''};
+    store.tokens['https://game.example'] =
+        jsonEncode({'token': 'remembered-bearer', 'account': profile});
+    var online = false, attempts = 0;
+    final account = GoogleAccountController(
+        store: store,
+        silentLogin: (_) async => throw StateError('No Google request'),
+        apiFactory: (uri) => GameApi(uri, client: MockClient((_) async {
+              attempts++;
+              return online
+                  ? http.Response(jsonEncode({'account': profile}), 200)
+                  : http.Response(
+                      '{"error":"offline","code":"STORAGE_UNAVAILABLE"}', 503);
+            })));
+    final game = GameController(await SharedPreferences.getInstance(),
+        apiFactory: (uri) => GameApi(uri,
+            client:
+                MockClient((_) async => http.Response('{"games":[]}', 200))));
+    await tester
+        .pumpWidget(QuartiersApp(controller: game, accountController: account));
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump(const Duration(seconds: 90));
+    expect(attempts, 1);
+    online = true;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(account.account, profile);
+    expect(attempts, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Google sign-in is mandatory before any game controls are shown',
       (tester) async {
     SharedPreferences.setMockInitialValues({'server': ''});

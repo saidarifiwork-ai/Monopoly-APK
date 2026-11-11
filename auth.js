@@ -3,13 +3,17 @@ const fs = require('node:fs');
 const {OAuth2Client} = require('google-auth-library');
 
 const COOKIE = 'quartiers_account';
-const TTL = 30 * 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
+const TTL = 90 * DAY;
+const MAX_LIFETIME = 365 * DAY;
+const RENEW_AFTER = DAY;
+const LEGACY_TTL = 30 * DAY;
 function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./google-client.json').webClientId || '', verifyIdToken,
     accountsFile = process.env.ACCOUNTS_FILE || '/tmp/quartiers-accounts.json', sessionsFile = process.env.SESSIONS_FILE, persistence, now = Date.now} = {}) {
     const google = new OAuth2Client();
     const verify = verifyIdToken || (token => google.verifyIdToken({idToken: token, audience: clientId}));
     let sessions = new Map();
-    const challenges = new Map();
+    const challenges = new Map(), renewals = new Map();
     let authWrites = Promise.resolve();
     const sessionPath = sessionsFile || accountsFile + '.sessions';
     const digest = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -38,7 +42,12 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
         const saved = persistence ? persistence.auth.sessions : JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
         if (saved.version !== 1 || !Array.isArray(saved.sessions)) throw Error('Format du stockage de sessions invalide.');
         for (const [key, session] of saved.sessions) {
-            if (/^[a-f0-9]{64}$/.test(key) && session?.expires > now() && session.account?.id && session.audience === clientId) sessions.set(key, session);
+            if (!/^[a-f0-9]{64}$/.test(key) || !Number.isFinite(session?.expires) || !session.account?.id || session.audience !== clientId) continue;
+            const createdAt = Number.isFinite(session.createdAt) ? session.createdAt : Math.min(now(), session.expires - LEGACY_TTL);
+            const absoluteExpires = Math.min(Number.isFinite(session.absoluteExpires) ? session.absoluteExpires : createdAt + MAX_LIFETIME, createdAt + MAX_LIFETIME);
+            const expires = Math.min(session.expires, absoluteExpires);
+            if (expires > now()) sessions.set(key, {...session, createdAt, absoluteExpires, expires,
+                renewedAt: Number.isFinite(session.renewedAt) ? session.renewedAt : createdAt});
         }
     }
     let accounts = persistence ? persistence.auth.accounts : {};
@@ -68,10 +77,29 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
         }
         next();
     }
+    function renewSession(key) {
+        if (renewals.has(key)) return renewals.get(key);
+        const work = updateAuth(draft => {
+            const current = draft.sessions.get(key);
+            if (!current || current.expires <= now() || current.absoluteExpires <= now()) return;
+            if (now() - current.renewedAt < RENEW_AFTER) return;
+            draft.sessions.set(key, {...current, renewedAt: now(), expires: Math.min(now() + TTL, current.absoluteExpires)});
+        }).finally(() => renewals.delete(key));
+        renewals.set(key, work);
+        return work;
+    }
     async function requireAccount(req, res, next) {
         try {await cleanup();} catch (_) {return storageFailure(res);}
         if (!configured) return res.status(503).json({code: 'AUTH_CONFIGURATION', error: 'La connexion Google n’est pas encore configurée par le propriétaire du jeu.'});
-        const session = sessions.get(digest(token(req)));
+        const bearer = token(req), key = digest(bearer);
+        let session = sessions.get(key);
+        if (session && session.expires > now() && now() - session.renewedAt >= RENEW_AFTER) {
+            try {await renewSession(key);} catch (_) {return storageFailure(res);}
+            session = sessions.get(key);
+            if (session && !req.headers.authorization) {
+                res.setHeader('Set-Cookie', cookie(req, bearer, Math.max(0, Math.floor((session.expires - now()) / 1000))));
+            }
+        }
         if (!session || session.expires <= now()) return res.status(401).json({code: 'AUTH_REQUIRED', error: 'Connectez-vous avec Google pour jouer.'});
         req.account = session.account;
         next();
@@ -92,7 +120,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
             res.set('Cache-Control', 'no-store');
             if (!configured) return res.status(503).json({code: 'AUTH_CONFIGURATION', error: 'La connexion Google n’est pas encore configurée.'});
             try {await cleanup();} catch (_) {return storageFailure(res);}
-            const {credential, nonce, platform} = req.body;
+            const {credential, nonce, platform} = req.body || {};
             if (typeof credential !== 'string' || credential.length > 10000 || !challenges.has(nonce)) return res.status(401).json({error: 'Connexion Google expirée. Réessayez.'});
             challenges.delete(nonce);
             try {
@@ -119,7 +147,7 @@ function createAuth({clientId = process.env.GOOGLE_CLIENT_ID || require('./googl
                         while (previous.length >= 8) draft.sessions.delete(previous.shift()[0]);
                         if (draft.sessions.size >= 4000) draft.sessions.delete(draft.sessions.keys().next().value);
                         const bearer = crypto.randomBytes(32).toString('base64url');
-                        draft.sessions.set(digest(bearer), {account, audience: clientId, expires: now() + TTL});
+                        draft.sessions.set(digest(bearer), {account, audience: clientId, createdAt: now(), renewedAt: now(), absoluteExpires: now() + MAX_LIFETIME, expires: now() + TTL});
                         return {account, bearer};
                     });
                 } catch (_) {return storageFailure(res);}
