@@ -31,7 +31,7 @@ Cette version reprend **le vrai plateau du site**, ses pions SVG, les dés, les 
 
 L’aperçu du rendu embarqué est contrôlé dans Chromium à une taille de téléphone ; il ne constitue pas un essai sur téléphone physique. Les tests de l’application et de l’API, les vérifications du rendu original et la signature de l’APK ont été contrôlés. La somme SHA-256 est fournie dans le fichier voisin.
 
-Version d’essai signée avec une clé de développement, pas une publication Google Play. Le serveur configuré est `https://monopoly-bw6e.onrender.com`, modifiable dans les réglages de l’accueil. Les joueurs web doivent ouvrir cette même adresse Render. Les salons sont sauvegardés dans `ROOMS_FILE` et rechargés au démarrage. Sur le disque éphémère de Render gratuit, un remplacement de l’instance peut supprimer ces sauvegardes ; seules les parties encore présentes sur le serveur peuvent être reprises.
+Version d’essai signée avec une clé de développement, pas une publication Google Play. Le serveur configuré est `https://monopoly-bw6e.onrender.com`, modifiable dans les réglages de l’accueil. Les joueurs web doivent ouvrir cette même adresse Render. Avec `DATABASE_URL`, comptes, connexions et parties sont conservés dans PostgreSQL puis rechargés au démarrage. Voir [l’activation de la base](../docs/BASE-DE-DONNEES.md). Sans cette configuration, les fichiers temporaires de Render peuvent disparaître lors d’un remplacement de l’instance.
 
 Le code se trouve dans `../mobile/`. Le fichier sans numéro de version est aussi actualisé pour les anciens liens.
 

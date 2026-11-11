@@ -47,3 +47,10 @@ Le web reçoit ses mises à jour par Render. Les joueurs Android doivent téléc
 et installer le nouvel APK pour recevoir les fichiers embarqués modifiés. Les
 deux clients utilisent le même serveur Render et le même code de salon pour jouer
 ensemble. Les salons de deux serveurs différents ne sont pas fusionnés.
+
+## Sauvegarde durable du serveur
+
+Pour conserver les comptes Google, les connexions et les parties après remplacement
+de l’instance, configurer PostgreSQL selon [BASE-DE-DONNEES.md](BASE-DE-DONNEES.md).
+L’activation se fait dans les variables du service Render existant ; le web et
+l’APK 1.0.18 restent compatibles et utilisent toujours la même adresse.

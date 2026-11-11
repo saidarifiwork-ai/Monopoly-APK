@@ -110,7 +110,7 @@ La reprise avec le code reste aussi possible. Elle ne crée pas un second
 joueur dans ce salon. Un autre compte ne peut pas reprendre sa place avec son
 seul jeton de partie. Les comptes et e-mails ne sont pas exposés dans l'état public.
 
-Le nom, la photo et la date de création du compte sont enregistrés dans
+En mode fichiers (sans `DATABASE_URL`), le nom, la photo et la date de création du compte sont enregistrés dans
 `ACCOUNTS_FILE` (par défaut `/tmp/quartiers-accounts.json`, hors du répertoire servi
 au public). Sur Render gratuit, ce fichier et les parties peuvent être perdus lors
 d'un redéploiement. L'identifiant du compte sera identique à la connexion suivante,
@@ -145,6 +145,10 @@ flutter test --dart-define=SMOKE_SERVER=http://127.0.0.1:8787
 
 
 ## Conserver la connexion
+
+**Stockage durable disponible :** renseigner `DATABASE_URL` pour conserver les comptes,
+les sessions et les parties dans PostgreSQL. Voir [la procédure d’activation](BASE-DE-DONNEES.md).
+Les limites de fichiers temporaires ci-dessous concernent le mode sans base.
 
 Fermer le navigateur ou l’APK ne déconnecte pas volontairement le compte.
 L’APK conserve son jeton et les métadonnées du compte dans le stockage sécurisé.
@@ -198,9 +202,9 @@ Les anciennes commandes, y compris un départ envoyé tardivement, sont refusée
 avec `409 SEAT_MOVED`. Les clients reviennent à l’accueil sans déconnecter Google.
 Rejoindre manuellement le salon avec le même compte effectue aussi ce transfert.
 
-Cette reprise s’appuie sur les parties présentes sur le serveur commun. Elle ne
-crée pas une sauvegarde dans Google Drive et ne rend pas durable le disque
-éphémère de Render. Si la sauvegarde du salon disparaît, le compte Google ne
+Cette reprise s’appuie sur les parties conservées par le serveur commun. Avec `DATABASE_URL`, elles sont rechargées depuis PostgreSQL au démarrage. Elle ne
+crée pas une sauvegarde dans Google Drive. Sans PostgreSQL, le disque
+éphémère de Render reste soumis aux limites décrites ci-dessus. Si la sauvegarde du salon disparaît, le compte Google ne
 suffit pas à recréer la partie. Voir les limites de stockage ci-dessus.
 
 Les tests couvrent le transfert web → Android → web, l’absence de code local,

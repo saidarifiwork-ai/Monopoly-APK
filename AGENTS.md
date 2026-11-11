@@ -40,3 +40,11 @@ explicite de l'utilisateur.
 
 La configuration Render et le fonctionnement commun sont décrits dans
 `docs/DEPOT-COMMUN.md`.
+
+- Le stockage durable utilise `DATABASE_URL` (PostgreSQL), avec `REQUIRE_DATABASE=true`
+  dans le déploiement configuré. Ne jamais ajouter de vraie adresse ou de mot de
+  passe au dépôt. Le guide `docs/BASE-DE-DONNEES.md` décrit le raccordement.
+  Pour les modifications du stockage, exécuter les tests PostgreSQL avec
+  `POSTGRES_TEST_URL` sur une base de test séparée ; les tests sans cette variable
+  ignorent les scénarios demandant PostgreSQL. Une seule instance du moteur
+  est active ; le nouveau processus retire les droits d’écriture de l’ancien.

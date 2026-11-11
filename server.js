@@ -8,6 +8,7 @@ const auction = require('./auction');
 const botAI = require('./bot-ai');
 const {shuffle} = require('./cards');
 const {createAuth} = require('./auth');
+const {openDatabase} = require('./database');
 const BOT_ACTION = Symbol('bot action');
 const CARD_SHUFFLE_VERSION = 3;
 
@@ -18,7 +19,18 @@ const PORT = process.env.PORT || 8787;
 app.use(cors());
 app.use(express.json());
 app.set('trust proxy', 1);
-createAuth().install(app);
+const authRouter = express.Router();
+let database = null;
+let storageReady = !process.env.DATABASE_URL;
+if (!process.env.DATABASE_URL) createAuth().install(authRouter);
+app.use('/api', (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (!storageReady || (database && !database.healthy)) {
+        if (req.path !== '/health') return res.status(503).json({code: 'STORAGE_UNAVAILABLE', error: 'La sauvegarde est temporairement indisponible. Votre connexion reste enregistrée.'});
+    }
+    next();
+});
+app.use(authRouter);
 app.use(express.static(__dirname));
 
 // Game state storage with persistence
@@ -45,6 +57,8 @@ function loadRooms() {
 
 // Save rooms to storage
 function saveRooms() {
+    if (!storageReady) return Promise.resolve();
+    if (database) return database.save('rooms', Object.fromEntries(rooms));
     try {
         const obj = Object.fromEntries(rooms);
         fs.writeFileSync(STORAGE_FILE, JSON.stringify(obj), 'utf8');
@@ -54,10 +68,17 @@ function saveRooms() {
 }
 
 // Auto-save every 5 seconds
-setInterval(saveRooms, 5000);
+let periodicSave = null;
+function savePeriodically() {
+    if (periodicSave) return;
+    periodicSave = Promise.resolve(saveRooms())
+        .catch(() => console.error('Sauvegarde PostgreSQL temporairement indisponible.'))
+        .finally(() => {periodicSave = null;});
+}
+const saveTimer = setInterval(savePeriodically, 5000);
 
 // Load on startup
-loadRooms();
+if (!process.env.DATABASE_URL) loadRooms();
 
 // Utility functions
 function newTiles() {
@@ -1161,7 +1182,8 @@ function updatePresence(s) {
 }
 
 // Run independently from requests so a closed client cannot stop detection.
-setInterval(() => {
+const presenceTimer = setInterval(() => {
+    if (!storageReady || (database && !database.healthy)) return;
     for (const s of rooms.values()) {
         try {
             updatePresence(s);
@@ -1175,9 +1197,11 @@ setInterval(() => {
             console.error('Presence update:', error.message);
         }
     }
-}, 1000).unref();
+    if (database) savePeriodically();
+}, 1000);
+presenceTimer.unref();
 
-function claimAccountSeat(s, p) {
+async function claimAccountSeat(s, p) {
     const oldHash = crypto.createHash('sha256').update(p.token).digest('hex');
     p.previousTokenHashes = [...new Set([...(p.previousTokenHashes || []), oldHash])].slice(-8);
     p.token = crypto.randomBytes(24).toString('hex');
@@ -1185,13 +1209,13 @@ function claimAccountSeat(s, p) {
     delete p.autoPlay;
     presence.touch(s, p);
     addLog(s, p.name + ' reprend la partie sur cet appareil.');
-    saveRooms();
+    await saveRooms();
     return {code: s.code, token: p.token};
 }
 
 // API Routes
 app.get('/api/health', (req, res) => {
-    res.json({app: 'quartiers', version: 20, accountResume: true, googleLoginRequired: true, authPersistence: 'file', sessionDays: 30, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
+    res.status(storageReady && (!database || database.healthy) ? 200 : 503).json({app: 'quartiers', version: 21, storage: database ? 'postgresql' : 'file', storageReady: storageReady && (!database || database.healthy), accountResume: true, googleLoginRequired: true, authPersistence: database ? 'postgresql' : 'file', sessionDays: 30, autoTradePolicy: 'reject-human-auto', cardShuffle: CARD_SHUFFLE_VERSION, botStrategy: 4, ultimateSoloOpponents: 2, botLevels: botAI.LEVELS.map(({id,name})=>({id,name}))});
 });
 
 app.get('/api/my-games', (req, res) => {
@@ -1208,21 +1232,21 @@ app.get('/api/my-games', (req, res) => {
     res.json({games});
 });
 
-app.post('/api/resume', (req, res) => {
+app.post('/api/resume', async (req, res) => {
     try {
         const s = getRoom(req.body.code);
         const p = s.players.find(player => player.accountId === req.account.id);
         if (!p) return res.status(403).json({error: 'Ce compte Google ne participe pas à cette partie.'});
         if (p.out || !['lobby', 'opening', 'playing'].includes(s.phase)) throw new Error('Cette partie ne peut plus être reprise.');
         res.set('Cache-Control', 'no-store');
-        res.json(claimAccountSeat(s, p));
+        res.json(await claimAccountSeat(s, p));
     } catch (error) {res.status(error.status || 400).json({error: error.message, ...(error.code ? {code: error.code} : {})});}
 });
 
-app.post('/api/create', (req, res) => {
+app.post('/api/create', async (req, res) => {
     try {
         if (rooms.size >= 50) {
-            throw new Error('Limite de salons atteinte : redémarrez le serveur.');
+            throw new Error('Limite de salons atteinte (50). Réutilisez un salon existant.');
         }
         
         const botLevel = botAI.normalize(req.body.botLevel ?? 'normal');
@@ -1264,18 +1288,19 @@ app.post('/api/create', (req, res) => {
             invokeGameAction(s, p, {type: 'start'});
         }
         
+        await saveRooms();
         res.json({code, token: p.token});
     } catch (error) {
         res.status(error.status || 400).json({error: error.message, ...(error.code ? {code: error.code} : {})});
     }
 });
 
-app.post('/api/join', (req, res) => {
+app.post('/api/join', async (req, res) => {
     try {
         const s = getRoom(req.body.code);
         
         const existing = s.players.find(player => player.accountId === req.account.id);
-        if (existing) return res.json(claimAccountSeat(s, existing));
+        if (existing) return res.json(await claimAccountSeat(s, existing));
 
         if (s.phase !== 'lobby' || s.players.length >= 6) {
             throw new Error('Partie commencée ou salon complet.');
@@ -1289,19 +1314,20 @@ app.post('/api/join', (req, res) => {
         presence.touch(s, p);
         addLog(s, p.name + ' rejoint la table.');
         
+        await saveRooms();
         res.json({code: s.code, token: p.token});
     } catch (error) {
         res.status(error.status || 400).json({error: error.message, ...(error.code ? {code: error.code} : {})});
     }
 });
 
-app.get('/api/state', (req, res) => {
+app.get('/api/state', async (req, res) => {
     try {
         const s = getRoom(req.query.code);
         const p = getPlayer(s, req.query.token, req.account.id);
         if (p.accountId !== req.account.id) return res.status(403).json({code: 'ACCOUNT_MISMATCH', error: 'Cette place appartient à un autre compte Google.'});
         
-        if (presence.touch(s, p)) addLog(s, p.name + ' reprend sa place au robot.');
+        if (presence.touch(s, p)) {addLog(s, p.name + ' reprend sa place au robot.');await saveRooms();}
         updatePresence(s);
 
         invokeBotStep(s);
@@ -1337,7 +1363,7 @@ app.get('/api/state', (req, res) => {
     }
 });
 
-app.post('/api/action', (req, res) => {
+app.post('/api/action', async (req, res) => {
     try {
         const s = getRoom(req.body.code);
         const p = getPlayer(s, req.body.token, req.account.id);
@@ -1356,14 +1382,49 @@ app.post('/api/action', (req, res) => {
             p.lastPlayedAt = Date.now();
         }
         
+        await saveRooms();
         res.json({ok: true});
     } catch (error) {
         res.status(error.status || 400).json({error: error.message, ...(error.code ? {code: error.code} : {})});
     }
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🎲 QUARTIERS : http://localhost:${PORT}`);
-    console.log(`Serveur prêt pour déploiement sur Render`);
-});
+// Load durable data and install authentication before accepting any request.
+function listen() {
+    const httpServer = app.listen(PORT, () => {
+        console.log(`🎲 QUARTIERS : http://localhost:${PORT}`);
+        console.log(database ? 'Stockage durable PostgreSQL actif.' : 'Stockage local : configurez DATABASE_URL pour conserver les données sur Render.');
+    });
+    let stopping = false;
+    async function shutdown() {
+        if (stopping) return;
+        stopping = true;
+        clearInterval(saveTimer);clearInterval(presenceTimer);
+        await new Promise(resolve => httpServer.close(resolve));
+        try {await saveRooms();} finally {if (database) await database.close();}
+    }
+    if (process.once) for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => {
+        shutdown().catch(() => {console.error('Arrêt pendant une indisponibilité du stockage.');process.exitCode = 1;});
+    });
+}
+if (process.env.DATABASE_URL) {
+    openDatabase().then(value => {
+        database = value;
+        rooms = new Map(Object.entries(database.rooms));
+        for (const s of rooms.values()) if (['opening', 'playing'].includes(s.phase)) prepareCardDecks(s);
+        createAuth({persistence: database}).install(authRouter);
+        storageReady = true;
+        listen();
+    }).catch(async () => {
+        if (database) await database.close();
+        console.error('Démarrage refusé : PostgreSQL indisponible. Vérifiez DATABASE_URL et les droits de la base.');
+        clearInterval(saveTimer);clearInterval(presenceTimer);
+        process.exitCode = 1;
+    });
+} else if (process.env.REQUIRE_DATABASE === 'true') {
+    console.error('Démarrage refusé : DATABASE_URL est obligatoire pour ce déploiement.');
+    clearInterval(saveTimer);clearInterval(presenceTimer);
+    process.exitCode = 1;
+} else {
+    listen();
+}

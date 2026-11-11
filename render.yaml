@@ -5,6 +5,12 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
+    numInstances: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REQUIRE_DATABASE
+        value: "true"
